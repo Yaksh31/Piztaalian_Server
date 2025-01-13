@@ -1,0 +1,201 @@
+const CouponMaster = require("../../models/CouponMaster/CouponMaster");
+const fs = require("fs");
+
+exports.getCouponMaster = async (req, res) => {
+  try {
+    const find = await CouponMaster.findOne({ _id: req.params._id }).exec();
+    res.json(find);
+  } catch (error) {
+    return res.status(500).send(error);
+  }
+};
+
+exports.createCouponMaster = async (req, res) => {
+    try {
+      const {
+        couponCode,
+        influencerName,
+        influencerInstagram,
+        influencerYT,
+        discountPercentage,
+        maxDiscount,
+        numberofCouponsAlloted,
+        expiryDate,
+        couponDescription,
+        applicableBranch,
+        isSoldOut,
+        isActive,
+        byBranch
+      } = req.body;
+      
+      const data = await CouponMaster.findOne({couponCode}).exec()
+      if(data)
+      {
+        return res.status(400).json({isOk:false , message:"Coupon Code with this name already Exist"})
+      }
+      // Check for required fields
+      if (!couponCode || !expiryDate) {
+        return res.status(400).json({
+          isOk: false,
+          message: "couponCode and expiryDate are required.",
+        });
+      }
+  
+      // Create and save the new coupon
+      const newCoupon = new CouponMaster({
+        couponCode,
+        influencerName,
+        influencerInstagram,
+        influencerYT,
+        discountPercentage,
+        maxDiscount,
+        numberofCouponsAlloted,
+        expiryDate,
+        couponDescription,
+        applicableBranch,
+        isSoldOut,
+        isActive,
+        byBranch
+      });
+  
+      const savedCoupon = await newCoupon.save();
+  
+      res.status(200).json({
+        isOk: true,
+        data: savedCoupon,
+        message: "Coupon created successfully.",
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({
+        isOk: false,
+        message: "An error occurred while creating the coupon.",
+        error: err.message,
+      });
+    }
+  };
+
+exports.listCouponMaster = async (req, res) => {
+  try {
+    const list = await CouponMaster.find().sort({ productName: 1 }).exec();
+    res.json(list);
+  } catch (error) {
+    return res.status(400).send(error);
+  }
+};
+
+ 
+
+exports.listCouponMasterByParams = async (req, res) => {
+  try {
+    let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
+
+    let query = [
+      {
+        $match: { IsActive: IsActive },
+      },
+       
+
+      {
+        $match: {
+          $or: [
+            {
+              productName: { $regex: match, $options: "i" },
+            },
+            
+          ],
+        },
+      },
+
+      {
+        $facet: {
+          stage1: [
+            {
+              $group: {
+                _id: null,
+                count: {
+                  $sum: 1,
+                },
+              },
+            },
+          ],
+          stage2: [
+            {
+              $skip: skip,
+            },
+            {
+              $limit: per_page,
+            },
+          ],
+        },
+      },
+      {
+        $unwind: {
+          path: "$stage1",
+        },
+      },
+      {
+        $project: {
+          count: "$stage1.count",
+          data: "$stage2",
+        },
+      },
+    ];
+   
+
+    if (sorton && sortdir) {
+      let sort = {};
+      sort[sorton] = sortdir == "desc" ? -1 : 1;
+      query = [
+        {
+          $sort: sort,
+        },
+      ].concat(query);
+    } else {
+      let sort = {};
+      sort["createdAt"] = -1;
+      query = [
+        {
+          $sort: sort,
+        },
+      ].concat(query);
+    }
+
+    const list = await CouponMaster.aggregate(query);
+
+    res.json(list);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+};
+
+exports.updateCouponMaster = async (req, res) => {
+  try {
+     
+    let fieldvalues = { ...req.body };
+     
+
+    const update = await CouponMaster.findOneAndUpdate(
+      { _id: req.params._id },
+      fieldvalues,
+
+      { new: true }
+    );
+    res.json(update);
+  } catch (err) {
+    res.status(400).send(err);
+  }
+};
+
+exports.removeCouponMaster = async (req, res) => {
+  try {
+    const del = await CouponMaster.findOneAndRemove({
+      _id: req.params._id,
+    });
+    res.json(del);
+  } catch (err) {
+    res.status(400).send(err);
+  }
+};
+
+ 
