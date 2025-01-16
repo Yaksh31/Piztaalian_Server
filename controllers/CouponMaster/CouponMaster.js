@@ -1,90 +1,101 @@
-const Branch = require("../../models/BranchMaster/BranchMaster");
+const CouponMaster = require("../../models/CouponMaster/CouponMaster");
 const fs = require("fs");
 
-exports.getBranch = async (req, res) => {
-    try {
-        // Find a branch by ID passed as a parameter
-        const branch = await Branch.findOne({ _id: req.params._id }).exec();
-        if (!branch) {
-            return res.status(404).json({ message: "Branch not found" });
-        }
-        res.json(branch);
-    } catch (error) {
-        return res.status(500).send({ error: error.message });
-    }
+exports.getCouponMaster = async (req, res) => {
+  try {
+    const find = await CouponMaster.findOne({ _id: req.params._id }).exec();
+    res.json(find);
+  } catch (error) {
+    return res.status(500).send(error);
+  }
 };
 
-exports.createBranch = async (req, res) => {
+exports.createCouponMaster = async (req, res) => {
     try {
-        // Ensure the directory for uploads exists
-        if (!fs.existsSync(`${__basedir}/uploads/branchImages`)) {
-            fs.mkdirSync(`${__basedir}/uploads/branchImages`, { recursive: true });
-        }
-
-        // Handle the uploaded file (if any)
-        let branchImage = req.file
-            ? `uploads/branchImages/${req.file.filename}`
-            : null;
-
-        // Extract details from request body
-        const { branchName, address, area, state, country, phone, email, password, isActive } = req.body;
-
-        // Check if branchName or email already exists
-        const branchExists = await Branch.findOne({
-            $or: [{ branchName }, { email }],
-        }).exec();
-
-        if (branchExists) {
-            return res.status(200).json({
-                isOk: false,
-                message: "Branch name or email already exists",
-            });
-        } else {
-            // Create and save the new branch
-            const newBranch = new Branch({
-                branchName,
-                address,
-                area,
-                state,
-                country,
-                phone,
-                email,
-                password, // Note: Ensure you hash the password in a real application
-                isActive,
-                branchImage,
-            });
-
-            const savedBranch = await newBranch.save();
-
-            res.status(200).json({
-                isOk: true,
-                data: savedBranch,
-                message: "Branch created successfully",
-            });
-        }
+      const {
+        couponCode,
+        influencerName,
+        influencerInstagram,
+        influencerYT,
+        discountPercentage,
+        maxDiscount,
+        numberofCouponsAlloted,
+        expiryDate,
+        couponDescription,
+        applicableBranch,
+        isSoldOut,
+        isActive,
+        byBranch
+      } = req.body;
+      
+      const data = await CouponMaster.findOne({couponCode}).exec()
+      if(data)
+      {
+        return res.status(400).json({isOk:false , message:"Coupon Code with this name already Exist"})
+      }
+      // Check for required fields
+      if (!couponCode || !expiryDate) {
+        return res.status(400).json({
+          isOk: false,
+          message: "couponCode and expiryDate are required.",
+        });
+      }
+      const sanitizedByBranch = byBranch && mongoose.Types.ObjectId.isValid(byBranch)
+      ? byBranch
+      : null;
+      // Create and save the new coupon
+      const newCoupon = new CouponMaster({
+        couponCode,
+        influencerName,
+        influencerInstagram,
+        influencerYT,
+        discountPercentage,
+        maxDiscount,
+        numberofCouponsAlloted,
+        expiryDate,
+        couponDescription,
+        applicableBranch,
+        isSoldOut,
+        isActive,
+        byBranch:byBranch || null
+      });
+  
+      const savedCoupon = await newCoupon.save();
+  
+      res.status(200).json({
+        isOk: true,
+        data: savedCoupon,
+        message: "Coupon created successfully.",
+      });
     } catch (err) {
-        console.error(err);
-        return res.status(500).send({ error: err.message });
+      console.error(err);
+      res.status(500).json({
+        isOk: false,
+        message: "An error occurred while creating the coupon.",
+        error: err.message,
+      });
     }
+  };
+
+exports.listCouponMaster = async (req, res) => {
+  try {
+    const list = await CouponMaster.find().sort({ productName: 1 }).exec();
+    res.json(list);
+  } catch (error) {
+    return res.status(400).send(error);
+  }
 };
 
-exports.listBranch = async (req, res) => {
-    try {
-        const list = await Branch.find().sort({ createdAt: -1 }).exec();
-        res.json(list);
-    } catch (error) {
-        return res.status(400).send(error);
-    }
-};
+ 
 
 
-exports.listBranchByParams = async (req, res) => {
+exports.listCouponMasterByParams = async (req, res) => {
     try {
-        let { skip, per_page, sorton, sortdir, match, isActive } = req.body;
+        let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
 
         let query = [
             {
-                $match: { isActive: isActive },
+                $match: { isActive: IsActive },
             },
 
             {
@@ -174,7 +185,7 @@ exports.listBranchByParams = async (req, res) => {
             ].concat(query);
         }
 
-        const list = await Branch.aggregate(query);
+        const list = await CouponMaster.aggregate(query);
 
         res.json(list);
     } catch (error) {
@@ -182,18 +193,17 @@ exports.listBranchByParams = async (req, res) => {
         res.status(500).send(error);
     }
 };
-exports.updateBranch = async (req, res) => {
+
+exports.updateCouponMaster = async (req, res) => {
   try {
-    let bannerImage = req.file
-      ? `uploads/userImages/${req.file.filename}`
-      : null;
+     
     let fieldvalues = { ...req.body };
-    if (bannerImage != null) {
-      fieldvalues.bannerImage = bannerImage;
-    }
-    const update = await Branch.findOneAndUpdate(
+     
+
+    const update = await CouponMaster.findOneAndUpdate(
       { _id: req.params._id },
       fieldvalues,
+
       { new: true }
     );
     res.json(update);
@@ -202,9 +212,9 @@ exports.updateBranch = async (req, res) => {
   }
 };
 
-exports.removeBranch = async (req, res) => {
+exports.removeCouponMaster = async (req, res) => {
   try {
-    const del = await Branch.findOneAndRemove({
+    const del = await CouponMaster.findOneAndRemove({
       _id: req.params._id,
     });
     res.json(del);
@@ -212,3 +222,5 @@ exports.removeBranch = async (req, res) => {
     res.status(400).send(err);
   }
 };
+
+ 
