@@ -1,4 +1,4 @@
-const Branch = require("../../../Server.DemoProject/models/BranchMaster/BranchMaster");
+const Branch = require("../../models/BranchMaster/BranchMaster");
 const fs = require("fs");
 
 exports.getBranch = async (req, res) => {

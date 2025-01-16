@@ -15,7 +15,7 @@ const CouponMsterSchema = new mongoose.Schema(
         influencerYT: {
             type: String,
         },
-        distcountPercentage: {
+        discountPercentage: {
             type: Number,
         },
         maxDiscount: {
@@ -35,13 +35,11 @@ const CouponMsterSchema = new mongoose.Schema(
         couponDescription: {
             type: String,
         },
-        applicableBranch: {
-            type: [{
+        applicableBranch: [{
                 type: mongoose.Schema.Types.ObjectId,
-                ref: "BranchMaster"
+                ref: "BranchMaster",
+                default: null,
             }],
-            default: null,
-        },
         byBranch: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "BranchMaster",

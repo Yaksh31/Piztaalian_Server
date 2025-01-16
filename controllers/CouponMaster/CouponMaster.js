@@ -40,7 +40,9 @@ exports.createCouponMaster = async (req, res) => {
           message: "couponCode and expiryDate are required.",
         });
       }
-  
+      const sanitizedByBranch = byBranch && mongoose.Types.ObjectId.isValid(byBranch)
+      ? byBranch
+      : null;
       // Create and save the new coupon
       const newCoupon = new CouponMaster({
         couponCode,
@@ -55,7 +57,7 @@ exports.createCouponMaster = async (req, res) => {
         applicableBranch,
         isSoldOut,
         isActive,
-        byBranch
+        byBranch:byBranch || null
       });
   
       const savedCoupon = await newCoupon.save();
@@ -86,87 +88,110 @@ exports.listCouponMaster = async (req, res) => {
 
  
 
+
 exports.listCouponMasterByParams = async (req, res) => {
-  try {
-    let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
+    try {
+        let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
 
-    let query = [
-      {
-        $match: { IsActive: IsActive },
-      },
-       
-
-      {
-        $match: {
-          $or: [
+        let query = [
             {
-              productName: { $regex: match, $options: "i" },
+                $match: { isActive: IsActive },
             },
-            
-          ],
-        },
-      },
 
-      {
-        $facet: {
-          stage1: [
             {
-              $group: {
-                _id: null,
-                count: {
-                  $sum: 1,
+                $facet: {
+                    stage1: [
+                        {
+                            $group: {
+                                _id: null,
+                                count: {
+                                    $sum: 1,
+                                },
+                            },
+                        },
+                    ],
+                    stage2: [
+                        {
+                            $skip: skip,
+                        },
+                        {
+                            $limit: per_page,
+                        },
+                    ],
                 },
-              },
-            },
-          ],
-          stage2: [
-            {
-              $skip: skip,
             },
             {
-              $limit: per_page,
+                $unwind: {
+                    path: "$stage1",
+                },
             },
-          ],
-        },
-      },
-      {
-        $unwind: {
-          path: "$stage1",
-        },
-      },
-      {
-        $project: {
-          count: "$stage1.count",
-          data: "$stage2",
-        },
-      },
-    ];
-   
+            {
+                $project: {
+                    count: "$stage1.count",
+                    data: "$stage2",
+                },
+            },
+        ];
+        if (match) {
+            query = [
+                {
+                    $match: {
+                        $or: [
+                            {
+                                branchName: { $regex: match, $options: "i" },
+                            },
+                            {
+                                address: { $regex: match, $options: "i" },
+                            },
+                            {
+                                area: { $regex: match, $options: "i" },
+                            },
+                            {
+                                state: { $regex: match, $options: "i" },
+                            },
+                            {
+                                country: { $regex: match, $options: "i" },
+                            },
+                            {
+                                phone: { $regex: match, $options: "i" },
+                            },
+                            {
+                                email: { $regex: match, $options: "i" },
+                            },
+                            {
+                                phone: { $regex: match, $options: "i" },
+                            },
+                        ],
+                    },
+                },
+            ].concat(query);
+        }
 
-    if (sorton && sortdir) {
-      let sort = {};
-      sort[sorton] = sortdir == "desc" ? -1 : 1;
-      query = [
-        {
-          $sort: sort,
-        },
-      ].concat(query);
-    } else {
-      let sort = {};
-      sort["createdAt"] = -1;
-      query = [
-        {
-          $sort: sort,
-        },
-      ].concat(query);
+        if (sorton && sortdir) {
+            let sort = {};
+            sort[sorton] = sortdir == "desc" ? -1 : 1;
+            query = [
+                {
+                    $sort: sort,
+                },
+            ].concat(query);
+        } else {
+            let sort = {};
+            sort["createdAt"] = -1;
+            query = [
+                {
+                    $sort: sort,
+                },
+            ].concat(query);
+        }
+
+        const list = await CouponMaster.aggregate(query);
+
+        res.json(list);
+    } catch (error) {
+        console.log(error);
+        res.status(500).send(error);
     }
-
-    const list = await CouponMaster.aggregate(query);
-
-    res.json(list);
-  } catch (error) {
-    res.status(500).send(error);
-  }
 };
 
 exports.updateCouponMaster = async (req, res) => {
