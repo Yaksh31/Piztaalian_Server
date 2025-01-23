@@ -592,3 +592,40 @@ exports.removeAndUpdateCity = async (req, res) => {
     res.status(400).send("remove city failed");
   }
 };
+
+
+
+
+
+
+exports.getStatesByCountry = async (req, res) => {
+  try {
+      const { countryId } = req.params; // Pass countryId as a URL parameter
+      const states = await State.find({ CountryID: countryId }).exec();
+
+      if (!states || states.length === 0) {
+          return res.status(404).json({ isOk: false, message: "No states found for the given country." });
+      }
+
+      res.status(200).json({ isOk: true, data: states });
+  } catch (error) {
+      console.error("Error fetching states by country:", error);
+      res.status(500).json({ isOk: false, message: "Internal server error", error: error.message });
+  }
+}; 
+
+exports.getCitiesByState = async (req, res) => {
+  try {
+      const { stateId } = req.params; // Pass stateId as a URL parameter
+      const cities = await City.find({ StateID: stateId }).exec();
+
+      if (!cities || cities.length === 0) {
+          return res.status(404).json({ isOk: false, message: "No cities found for the given state." });
+      }
+
+      res.status(200).json({ isOk: true, data: cities });
+  } catch (error) {
+      console.error("Error fetching cities by state:", error);
+      res.status(500).json({ isOk: false, message: "Internal server error", error: error.message });
+  }
+};

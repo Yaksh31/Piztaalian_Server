@@ -25,6 +25,7 @@ const {
   createCity,
   getCity,
   updateCity,
+  getStatesByCountry,getCitiesByState
 } = require("../controllers/Location/Location");
 const catchAsync = require("../utils/catchAsync");
 
@@ -57,5 +58,14 @@ router.get("/auth/location/city/:_id", catchAsync(getCity));
 
 router.post("/auth/location/city", catchAsync(createCity));
 router.put("/auth/location/city/:_id", catchAsync(updateCity));
+
+
+
+router.get("/auth/states/:countryId", catchAsync(getStatesByCountry));
+
+router.get("/auth/cities/:stateId", catchAsync(getCitiesByState));
+ 
+
+
 
 module.exports = router;

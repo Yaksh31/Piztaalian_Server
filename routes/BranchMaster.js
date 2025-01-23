@@ -10,6 +10,7 @@ const {
   getBranch,
   updateBranch,
   removeBranch,
+  branchLogin, 
 } = require("../controllers/BranchMaster/BranchMaster");
 
 // Multer configuration for handling file uploads
@@ -43,5 +44,8 @@ router.put("/auth/branches/update/:_id", upload.single("branchImage"), catchAsyn
 
 // Remove a branch
 router.delete("/auth/branches/remove/:_id", catchAsync(removeBranch));
+
+router.post("/branches/login", catchAsync(branchLogin));
+ 
 
 module.exports = router;

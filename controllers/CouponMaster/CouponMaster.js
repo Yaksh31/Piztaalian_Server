@@ -1,6 +1,7 @@
 const CouponMaster = require("../../models/CouponMaster/CouponMaster");
 const fs = require("fs");
-
+const QRCode = require("qrcode");
+const path = require("path")
 exports.getCouponMaster = async (req, res) => {
   try {
     const find = await CouponMaster.findOne({ _id: req.params._id }).exec();
@@ -11,71 +12,81 @@ exports.getCouponMaster = async (req, res) => {
 };
 
 exports.createCouponMaster = async (req, res) => {
-    try {
-      const {
-        couponCode,
-        influencerName,
-        influencerInstagram,
-        influencerYT,
-        discountPercentage,
-        maxDiscount,
-        numberofCouponsAlloted,
-        expiryDate,
-        couponDescription,
-        applicableBranch,
-        isSoldOut,
-        isActive,
-        byBranch
-      } = req.body;
-      
-      const data = await CouponMaster.findOne({couponCode}).exec()
-      if(data)
-      {
-        return res.status(400).json({isOk:false , message:"Coupon Code with this name already Exist"})
-      }
-      // Check for required fields
-      if (!couponCode || !expiryDate) {
-        return res.status(400).json({
-          isOk: false,
-          message: "couponCode and expiryDate are required.",
-        });
-      }
-      const sanitizedByBranch = byBranch && mongoose.Types.ObjectId.isValid(byBranch)
-      ? byBranch
-      : null;
-      // Create and save the new coupon
-      const newCoupon = new CouponMaster({
-        couponCode,
-        influencerName,
-        influencerInstagram,
-        influencerYT,
-        discountPercentage,
-        maxDiscount,
-        numberofCouponsAlloted,
-        expiryDate,
-        couponDescription,
-        applicableBranch,
-        isSoldOut,
-        isActive,
-        byBranch:byBranch || null
-      });
-  
-      const savedCoupon = await newCoupon.save();
-  
-      res.status(200).json({
-        isOk: true,
-        data: savedCoupon,
-        message: "Coupon created successfully.",
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({
-        isOk: false,
-        message: "An error occurred while creating the coupon.",
-        error: err.message,
+  try {
+    const {
+      couponCode,
+      influencerName,
+      influencerInstagram,
+      influencerYT,
+      discountPercentage,
+      maxDiscount,
+      numberofCouponsAlloted,
+      expiryDate,
+      couponDescription,
+      applicableBranch,
+      isSoldOut,
+      isActive,
+      byBranch
+    } = req.body;
+
+    const data = await CouponMaster.findOne({ couponCode }).exec()
+    if (data) {
+      return res.status(400).json({ isOk: false, message: "Coupon Code with this name already Exist" })
+    }
+    // Check for required fields
+    if (!couponCode || !expiryDate) {
+      return res.status(400).json({error: "couponCode and expiryDate are required.",
       });
     }
-  };
+    const sanitizedByBranch = byBranch && mongoose.Types.ObjectId.isValid(byBranch)
+      ? byBranch
+      : null;
+    // Create and save the new coupon
+    const newCoupon = new CouponMaster({
+      couponCode,
+      influencerName,
+      influencerInstagram,
+      influencerYT,
+      discountPercentage,
+      maxDiscount,
+      numberofCouponsAlloted,
+      expiryDate,
+      couponDescription,
+      applicableBranch,
+      isSoldOut,
+      isActive,
+      byBranch: byBranch || null
+    });
+
+    const savedCoupon = await newCoupon.save();
+
+
+    const uploadsFolder = path.join(__dirname, "uploads/CouponQR");
+    const qrFileName = `${savedCoupon.couponCode}.png`;
+    const qrUrl = `${process.env.REACT_APP_API_URL}/CouponQr/${savedCoupon._id}`; // BASE_URL is your server's base URL
+
+    const qrFilePath = `uploads/CouponQR/${qrFileName}`;
+    QRCode.toFile(qrFilePath, qrUrl);
+    // Ensure the uploads/CouponQR folder exists
+    if (!fs.existsSync(uploadsFolder)) {
+      fs.mkdirSync(uploadsFolder, { recursive: true });
+    }
+    savedCoupon.qrCodeUrl = qrFilePath
+    savedCoupon.save()
+    res.status(200).json({
+      isOk: true,
+      data: savedCoupon,
+      message: "Coupon created successfully.",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      isOk: false,
+      message: "An error occurred while creating the coupon.",
+      error: err.message,
+    });
+  }
+};
 
 exports.listCouponMaster = async (req, res) => {
   try {
@@ -86,119 +97,119 @@ exports.listCouponMaster = async (req, res) => {
   }
 };
 
- 
+
 
 
 exports.listCouponMasterByParams = async (req, res) => {
-    try {
-        let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
+  try {
+    let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
 
-        let query = [
-            {
-                $match: { isActive: IsActive },
-            },
+    let query = [
+      {
+        $match: { isActive: IsActive },
+      },
 
+      {
+        $facet: {
+          stage1: [
             {
-                $facet: {
-                    stage1: [
-                        {
-                            $group: {
-                                _id: null,
-                                count: {
-                                    $sum: 1,
-                                },
-                            },
-                        },
-                    ],
-                    stage2: [
-                        {
-                            $skip: skip,
-                        },
-                        {
-                            $limit: per_page,
-                        },
-                    ],
+              $group: {
+                _id: null,
+                count: {
+                  $sum: 1,
                 },
+              },
+            },
+          ],
+          stage2: [
+            {
+              $skip: skip,
             },
             {
-                $unwind: {
-                    path: "$stage1",
-                },
+              $limit: per_page,
             },
-            {
-                $project: {
-                    count: "$stage1.count",
-                    data: "$stage2",
-                },
-            },
-        ];
-        if (match) {
-            query = [
-                {
-                    $match: {
-                        $or: [
-                            {
-                                branchName: { $regex: match, $options: "i" },
-                            },
-                            {
-                                address: { $regex: match, $options: "i" },
-                            },
-                            {
-                                area: { $regex: match, $options: "i" },
-                            },
-                            {
-                                state: { $regex: match, $options: "i" },
-                            },
-                            {
-                                country: { $regex: match, $options: "i" },
-                            },
-                            {
-                                phone: { $regex: match, $options: "i" },
-                            },
-                            {
-                                email: { $regex: match, $options: "i" },
-                            },
-                            {
-                                phone: { $regex: match, $options: "i" },
-                            },
-                        ],
-                    },
-                },
-            ].concat(query);
-        }
-
-        if (sorton && sortdir) {
-            let sort = {};
-            sort[sorton] = sortdir == "desc" ? -1 : 1;
-            query = [
-                {
-                    $sort: sort,
-                },
-            ].concat(query);
-        } else {
-            let sort = {};
-            sort["createdAt"] = -1;
-            query = [
-                {
-                    $sort: sort,
-                },
-            ].concat(query);
-        }
-
-        const list = await CouponMaster.aggregate(query);
-
-        res.json(list);
-    } catch (error) {
-        console.log(error);
-        res.status(500).send(error);
+          ],
+        },
+      },
+      {
+        $unwind: {
+          path: "$stage1",
+        },
+      },
+      {
+        $project: {
+          count: "$stage1.count",
+          data: "$stage2",
+        },
+      },
+    ];
+    if (match) {
+      query = [
+        {
+          $match: {
+            $or: [
+              {
+                branchName: { $regex: match, $options: "i" },
+              },
+              {
+                address: { $regex: match, $options: "i" },
+              },
+              {
+                area: { $regex: match, $options: "i" },
+              },
+              {
+                state: { $regex: match, $options: "i" },
+              },
+              {
+                country: { $regex: match, $options: "i" },
+              },
+              {
+                phone: { $regex: match, $options: "i" },
+              },
+              {
+                email: { $regex: match, $options: "i" },
+              },
+              {
+                phone: { $regex: match, $options: "i" },
+              },
+            ],
+          },
+        },
+      ].concat(query);
     }
+
+    if (sorton && sortdir) {
+      let sort = {};
+      sort[sorton] = sortdir == "desc" ? -1 : 1;
+      query = [
+        {
+          $sort: sort,
+        },
+      ].concat(query);
+    } else {
+      let sort = {};
+      sort["createdAt"] = -1;
+      query = [
+        {
+          $sort: sort,
+        },
+      ].concat(query);
+    }
+
+    const list = await CouponMaster.aggregate(query);
+
+    res.json(list);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
 };
 
 exports.updateCouponMaster = async (req, res) => {
   try {
-     
+
     let fieldvalues = { ...req.body };
-     
+
 
     const update = await CouponMaster.findOneAndUpdate(
       { _id: req.params._id },
@@ -223,4 +234,42 @@ exports.removeCouponMaster = async (req, res) => {
   }
 };
 
- 
+
+exports.generateCouponQRCode = async (req, res) => {
+  try {
+    const { _id } = req.params;
+
+    // Find the coupon by ID
+    const coupon = await CouponMaster.findOne({ _id }).exec();
+    if (!coupon) {
+      return res.status(404).json({ isOk: false, message: "Coupon not found." });
+    }
+
+    // Prepare the data to be encoded in the QR code
+    const qrData = {
+      couponCode: coupon.couponCode,
+      influencerName: coupon.influencerName || "",
+      discountPercentage: coupon.discountPercentage || 0,
+      maxDiscount: coupon.maxDiscount || 0,
+      expiryDate: coupon.expiryDate,
+      couponDescription: coupon.couponDescription || "",
+    };
+
+    // Define the folder and file path for storing the QR code
+
+    // Generate the QR code and save it as a file
+    QRCode.toFile(qrFilePath, qrUrl);
+    res.status(200).json({
+      isOk: true,
+      qrCodeUrl: qrUrl,
+      message: "QR Code generated and saved successfully.",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      isOk: false,
+      message: "An error occurred while generating the QR code.",
+      error: err.message,
+    });
+  }
+};
