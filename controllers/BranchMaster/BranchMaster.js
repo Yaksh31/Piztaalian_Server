@@ -1,5 +1,9 @@
 const Branch = require("../../models/BranchMaster/BranchMaster");
 const fs = require("fs");
+const jwt = require("jsonwebtoken");
+const State = require("../../models/Location/State")
+const City = require("../../models/Location/City")
+const Country = require("../../models/Location/Country")
 
 exports.getBranch = async (req, res) => {
     try {
@@ -27,7 +31,7 @@ exports.createBranch = async (req, res) => {
             : null;
 
         // Extract details from request body
-        const { branchName, address, area, state, country, phone, email, password, isActive } = req.body;
+        const { branchName, address, area,city, state, country, phone, email, password, isActive } = req.body;
 
         // Check if branchName or email already exists
         const branchExists = await Branch.findOne({
@@ -45,6 +49,7 @@ exports.createBranch = async (req, res) => {
                 branchName,
                 address,
                 area,
+                city,
                 state,
                 country,
                 phone,
@@ -70,7 +75,7 @@ exports.createBranch = async (req, res) => {
 
 exports.listBranch = async (req, res) => {
     try {
-        const list = await Branch.find().sort({ createdAt: -1 }).exec();
+        const list = await Branch.find({isActive:true}).sort({ createdAt: -1 }).exec();
         res.json(list);
     } catch (error) {
         return res.status(400).send(error);
@@ -85,6 +90,49 @@ exports.listBranchByParams = async (req, res) => {
         let query = [
             {
                 $match: { isActive: isActive },
+            },
+            {
+                $lookup: {
+                    from: "countries", // Replace with your actual collection name
+                    localField: "country",
+                    foreignField: "_id",
+                    as: "countryData"
+                }
+            },
+            {
+                $lookup: {
+                    from: "states", // Replace with your actual collection name
+                    localField: "state",
+                    foreignField: "_id",
+                    as: "stateData"
+                }
+            },
+            {
+                $lookup: {
+                    from: "cities", // Replace with your actual collection name
+                    localField: "city",
+                    foreignField: "_id",
+                    as: "cityData"
+                }
+            },
+            // Unwind the arrays created by lookups
+            {
+                $unwind: {
+                    path: "$countryData",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $unwind: {
+                    path: "$stateData",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $unwind: {
+                    path: "$cityData",
+                    preserveNullAndEmptyArrays: true
+                }
             },
 
             {
@@ -202,6 +250,8 @@ exports.updateBranch = async (req, res) => {
   }
 };
 
+
+
 exports.removeBranch = async (req, res) => {
   try {
     const del = await Branch.findOneAndRemove({
@@ -212,3 +262,56 @@ exports.removeBranch = async (req, res) => {
     res.status(400).send(err);
   }
 };
+
+
+
+exports.branchLogin = async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Find branch by email
+    const branch = await Branch.findOne({ email }).exec();
+
+    if (!branch) {
+      return res.status(404).json({
+        isOk: false,
+        message: "Branch not found",
+      });
+    }
+
+    // Verify password
+    if (branch.password !== password) {
+      return res.status(401).json({
+        isOk: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Generate JWT token
+    // const token = jwt.sign(
+    //   { id: branch._id, role: "branch", branchName: branch.branchName },
+    //   process.env.JWT_SECRET_TOKEN,
+    //   { expiresIn: "1d" } // Token valid for 1 day
+    // );
+
+    res.status(200).json({
+      isOk: true,
+      message: "Login successful",
+      
+      data: {
+        id: branch._id,
+        email: branch.email,
+        branchName: branch.branchName,
+        role: "branch",
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      isOk: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+ 

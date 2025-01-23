@@ -53,6 +53,10 @@ const CouponMsterSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        qrCodeUrl: {
+            type: String, // Store the URL of the QR code
+            default: null, // Default is null if the QR code has not been generated
+          },
     },
     { timestamps: true }
 );

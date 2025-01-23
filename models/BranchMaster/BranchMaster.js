@@ -19,12 +19,19 @@ const BranchSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    city: {
+      type: mongoose.Schema.Types.ObjectId, // Reference to City collection
+      ref: "City",
+      required: true,
+    },
     state: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId, // Reference to State collection
+      ref: "State",
       required: true,
     },
     country: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId, // Reference to Country collection
+      ref: "Country",
       required: true,
     },
     phone: {
