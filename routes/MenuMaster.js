@@ -1,11 +1,14 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
+const multer = require("multer");
+const path = require("path");
 
-const { getMenuItemsByBranchId, updateMenuMaster } = require('../controllers/MenuMaster/MenuMaster');
-
-
+const {
+ getBranchesWithZeroMenuItems,
+  getMenuItemsByBranchId,
+  updateMenuMaster,
+  listMenuByParams,
+} = require("../controllers/MenuMaster/MenuMaster");
 
 // Route for creating or updating MenuMaster
 
@@ -24,5 +27,11 @@ const upload = multer({ storage: multerStorage });
 // Routes
 router.post("/auth/menuMaster", upload.any(), updateMenuMaster);
 router.get("/auth/branches/menuItems/:branchId", getMenuItemsByBranchId);
+// List Menu with filters and pagination
+router.post("/auth/menu/listByParams", listMenuByParams);
+
+// Define route to fetch all menu items
+router.get("/auth/get/branchForMenu", getBranchesWithZeroMenuItems);
+
 
 module.exports = router;
