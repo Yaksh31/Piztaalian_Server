@@ -9,7 +9,9 @@ const {
   getCouponAssign,
   updateCouponAssign,
   removeCouponAssign,
-  redeemCoupon
+  redeemCoupon,
+  downloadCouponPDF,
+  downloadAllCouponsPDF
 } = require("../controllers/CouponMaster/CouponAssign");
 
 // Define routes
@@ -33,5 +35,9 @@ router.put("/auth/CouponAssign/update/:_id", catchAsync(updateCouponAssign));
 router.delete("/auth/CouponAssign/remove/:_id", catchAsync(removeCouponAssign));
 
 router.post("/auth/CouponAssign/redeem/:_id", catchAsync(redeemCoupon));
+
+router.get("/auth/CouponAssign/downloadPDF/:_id", catchAsync(downloadCouponPDF));
+
+router.get("/auth/CouponAssign/downloadallPDF", catchAsync(downloadAllCouponsPDF));
 
 module.exports = router;

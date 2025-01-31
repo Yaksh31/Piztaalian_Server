@@ -1,40 +1,20 @@
 const Branch = require("../../models/BranchMaster/BranchMaster");
 const fs = require("fs");
-const path = require("path");
+const path = require('path');
 const jwt = require("jsonwebtoken");
 const InfluencerMaster = require("../../models/CouponMaster/InfluencerMaster")
 const CouponMaster = require("../../models/CouponMaster/CouponMaster")
 const QRCode = require("qrcode");
 const CouponAssign = require ("../../models/CouponMaster/CouponAssign")
+const archiver = require('archiver');
+const PDFDocument = require('pdfkit');
 
 
-// exports.getCouponAssign = async (req, res) => {
-//     try {
-//       const couponAssign = await CouponAssign.findOne({ _id: req.params._id })
-//         .populate("influencer", "name")
-//         .populate("coupon", "couponCode")
-//         .populate("branch", "branchName")
-//         .exec();
-  
-//       if (!couponAssign) {
-//         return res.status(404).json({ message: "Coupon Assign not found" });
-//       }
-  
-//       res.json(couponAssign);
-//     } catch (error) {
-//       return res.status(500).send({ error: error.message });
-//     }
-//   };
+
 
 exports.getCouponAssign = async (req, res) => {
   try {
-    // const find = await User.findOne({ _id: req.params._id }).populate("branchName").exec();
-
-    // if (!find) {
-    //   return res.status(400).json({ message: "Coupon code is required." });
-    // }
-
-    // Fetch the coupon assignment
+    
     const couponAssign = await CouponAssign.findById(req.params._id)
       .populate('influencer')
       .populate('coupon')
@@ -59,79 +39,78 @@ exports.getCouponAssign = async (req, res) => {
 
 
 
-  exports.createCouponAssign = async (req, res) => {
+ // controllers/CouponAssignController.js
+
+
+
+exports.createCouponAssign = async (req, res) => {
   try {
-    const { influencer, coupon, numberOfCoupons, branch } = req.body;
+    const { influencer, coupon, numberOfCoupons, branch, isActive } = req.body;
 
     // Validate fields
-    if (!influencer ||  !Array.isArray(influencer) ||!coupon || !numberOfCoupons || !branch) {
+    if (!influencer || !Array.isArray(influencer) || !coupon || !numberOfCoupons || !branch) {
       return res.status(400).json({
         message: "All fields (influencer, coupon, numberOfCoupons, branch) are required.",
       });
     }
 
-   
+    // Fetch Influencer and Coupon data
     const influencerData = await InfluencerMaster.find({ _id: { $in: influencer } }).exec();
     const couponData = await CouponMaster.findById(coupon).exec();
 
-    if (!influencerData || !couponData) {
+    if (!influencerData.length || !couponData) {
       return res.status(400).json({
         message: "Invalid Influencer or Coupon selected.",
       });
     }
 
-     
-    // const uniqueCouponCode = `${influencerData.name.slice(0, 3).toUpperCase()}_${couponData.couponCode.slice(0, 3).toUpperCase()}_${Date.now().toString().slice(-4)}`;
+    // Function to generate unique coupon code
     const generateUniqueCouponCode = (influencerName, couponCode) => {
-      
       return `${influencerName.slice(0, 3).toUpperCase()}_${couponCode.slice(0, 3).toUpperCase()}_${Date.now().toString().slice(-4)}`;
     };
 
-
-    
-   
+    // Ensure the uploads directory exists
     const uploadsFolder = path.join(__dirname, "../../uploads/CouponQR");
     if (!fs.existsSync(uploadsFolder)) {
       fs.mkdirSync(uploadsFolder, { recursive: true });
     }
-    const createdAssignments = [];
-    let savedCouponAssign2=[]
+
+    const createdAssignments = []; // To store all created assignments
+
     for (const inf of influencerData) {
-    const uniqueCouponCode = generateUniqueCouponCode(inf.name, couponData.couponCode);
-      
-      
-      // 4) Create the new CouponAssign doc
+      const uniqueCouponCode = generateUniqueCouponCode(inf.name, couponData.couponCode);
+
+      // Create new CouponAssign document
       const newCouponAssign = new CouponAssign({
         influencer: inf._id,
         coupon: coupon,
         numberOfCoupons,
-        branch, // assuming 'branch' is an array of branch IDs
+        branch, // Assuming 'branch' is an array of branch IDs
         uniqueCouponCode,
-        // qrCodeUrl: `uploads/CouponQR/${qrFileName}`, // relative path for the QR
+        isActive,
       });
 
+      // Save the document to get the _id
+      const savedCouponAssign = await newCouponAssign.save();
+      createdAssignments.push(savedCouponAssign); // Add to the array
 
-    // 7) Save doc
-    const savedCouponAssign = await newCouponAssign.save();
-    createdAssignments.push(savedCouponAssign);
-
-
-     
+      // Generate QR code using the _id
       const qrFileName = `${savedCouponAssign._id}.png`;
       const qrFilePath = path.join(uploadsFolder, qrFileName);
-      const qrData = `${process.env.REACT_APP_API_URL}/redeemcoupon/${savedCouponAssign._id}`; 
+      const qrData = `${process.env.REACT_APP_API_URL}/redeemcoupon/${savedCouponAssign._id}`; // Ensure this URL is correct and accessible
 
-      // 3) Generate QR code
       await QRCode.toFile(qrFilePath, qrData);
-      newCouponAssign.qrCodeUrl = `uploads/CouponQR/${qrFileName}`
-      savedCouponAssign2= await newCouponAssign.save();
+
+      // Update the CouponAssign document with the QR code URL
+      savedCouponAssign.qrCodeUrl = `uploads/CouponQR/${qrFileName}`;
+      await savedCouponAssign.save();
     }
 
-    // 8) Return success
+    // Return all created assignments
     res.status(200).json({
       isOk: true,
-      data: savedCouponAssign2,
-      message: "Coupon assigned successfully with QR code generated.",
+      data: createdAssignments,
+      message: "Coupons assigned successfully with QR codes generated.",
     });
 
   } catch (err) {
@@ -156,9 +135,9 @@ exports.listCouponAssignByParams = async (req, res) => {
       let { skip, per_page, sorton, sortdir, match, isActive } = req.body;
   
       let query = [
-        // {
-        //   $match: { isActive: isActive }, // Match active/inactive status
-        // },
+        {
+          $match: { isActive: isActive }, // Match active/inactive status
+        },
         {
           $lookup: {
             from: "influencermasters", // Replace with your actual collection name
@@ -244,13 +223,10 @@ exports.listCouponAssignByParams = async (req, res) => {
             $match: {
               $or: [
                 {
-                  "influencerData.name": { $regex: match, $options: "i" },
+                  influencer: { $regex: match, $options: "i" },
                 },
                 {
-                  "couponData.couponCode": { $regex: match, $options: "i" },
-                },
-                {
-                  "branchData.branchName": { $regex: match, $options: "i" },
+                  coupon: { $regex: match, $options: "i" },
                 },
                 {
                   uniqueCouponCode: { $regex: match, $options: "i" },
@@ -291,7 +267,7 @@ exports.listCouponAssignByParams = async (req, res) => {
   
   exports.updateCouponAssign = async (req, res) => {
     try {
-      const { influencer, coupon, numberOfCoupons, branch } = req.body;
+      const { influencer, coupon, numberOfCoupons, branch , isActive} = req.body;
   
       if (!influencer || !coupon || !numberOfCoupons || !branch) {
         return res.status(400).json({
@@ -321,7 +297,7 @@ exports.listCouponAssignByParams = async (req, res) => {
   
       const updatedCouponAssign = await CouponAssign.findOneAndUpdate(
         { _id: req.params._id },
-        { influencer, coupon, numberOfCoupons, branch, uniqueCouponCode },
+        { influencer, coupon, numberOfCoupons, branch, uniqueCouponCode,isActive },
         { new: true }
       ).populate('influencer').populate('coupon').populate('branch').exec();
   
@@ -405,6 +381,331 @@ exports.removeCouponAssign = async (req, res) => {
     }
   };
   
+
+  // controllers/CouponAssignController.js
+//   const PDFDocument = require('pdfkit');
+// const fs = require('fs');
+// const path = require('path');
+// const CouponAssign = require('../../models/CouponMaster/CouponAssign');
+
+// const couponAssign = await CouponAssign.findById(req.params._id)
+//       .populate('influencer')
+//       .populate('coupon')
+//       .populate('qrCodeUrl')
+//       .exec();sj
+
+const puppeteer = require("puppeteer");
+
+exports.downloadCouponPDF = async (req, res) => {
+  try {
+    const id = req.params._id;
+
+    const couponAssign = await CouponAssign.findById(id)
+      .populate("influencer")
+      .populate("coupon")
+      .populate("branch")
+      .exec();
+
+    if (!couponAssign) {
+      return res.status(404).json({ message: "Coupon assignment not found." });
+    }
+
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+
+    const qrCodePath = path.join(__basedir, couponAssign.qrCodeUrl);
+    const qrCodeBase64 = fs.existsSync(qrCodePath)
+      ? `data:image/png;base64,${fs.readFileSync(qrCodePath).toString("base64")}`
+      : "";
+
+    // **Generate HTML content from your style**
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coupon</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .coupon-container {
+      background: lightblue;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .coupon {
+      width: 100%;
+      max-width: 500px;
+      height: 200px;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: auto;
+      filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
+      display: flex;
+      align-items: stretch;
+      position: relative;
+      text-transform: uppercase;
+    }
+    .coupon::before,
+    .coupon::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      z-index: -1;
+    }
+    .coupon::before {
+      left: 0;
+      background-image: radial-gradient(circle at 0 50%, transparent 17px, #cf2027 18px);
+    }
+    .coupon::after {
+      right: 0;
+      background-image: radial-gradient(circle at 100% 50%, transparent 18px, #cf2027 19px);
+    }
+    .coupon > div {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .left {
+      border-right: 2px dashed rgba(255, 255, 255, 0.71);
+      width: 23%;
+      padding: 0px;
+    }
+    .left div {
+      transform: rotate(-90deg);
+      white-space: nowrap;
+      font-weight: 600;
+      font-size: 10px;
+    }
+    .center {
+      width: 54%;
+      text-align: center;
+      padding: 15px;
+      background-color: #cf2027;
+    }
+    .p-2 {
+      padding: 0;
+    }
+    .coupon-image {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      height: 90px;
+      width: auto;
+    }
+    .right {
+      background-image: radial-gradient(circle at 100% 50%, transparent 17px, #fff 18px);
+      width: 23%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0px;
+    }
+    .right div {
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      transform: rotate(-90deg);
+      letter-spacing: 2px;
+    }
+    .center h2 {
+      border-radius: 5px;
+      background: #000;
+      color: #fff;
+      margin: 0;
+      font-size: 25px;
+      white-space: nowrap;
+      display: inline-block;
+      padding: 5px;
+    }
+    .center p {
+      font-size: 15px;
+      margin: 0;
+      color: #fff;
+    }
+    .left a {
+      text-decoration: none;
+      color: #fff;
+    }
+    .logo {
+      background: #fff;
+      border-radius: 10px;
+      padding: 5px;
+      margin-bottom: 15px;
+    }
+    .p-2 img {
+      height: 80px;
+      width: 80px;
+    }
+    .center small {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 0;
+      padding-bottom: 10px;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="coupon-container">
+    <div class="coupon">
+      <div class="left">
+        <div class="text-center">
+          Enjoy Your Gift From <br />
+          <a href="https://instagram.com/${couponAssign.influencer.instagram}" target="_blank" rel="noopener noreferrer">
+            @${couponAssign.influencer.instagram}
+          </a>
+        </div>
+      </div>
+      <div class="center">
+        <div class="p-2">
+          <div class="coupon-image">
+            <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
+            <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
+          </div>
+          <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
+          <p>${couponAssign.coupon.couponDescription}</p>
+          <small>Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}</small>
+        </div>
+      </div>
+      <div class="right">
+        <div>${couponAssign.uniqueCouponCode}</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    console.log(`${__basedir}/uploads/${couponAssign.qrCodeUrl}`)
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+
+    const uploaddir = `${__basedir}/uploads`;
+    const filename = "poojan.pdf"
+    const filePath = path.join(uploaddir, filename)
+
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      path:filePath,
+      printBackground: true, // To ensure background colors render
+    });
+
+    await browser.close();
+
+    // res.setHeader("Content-Type", "application/pdf");
+    // res.setHeader(
+    //   "Content-Disposition",
+    //   `attachment; poojan.pdf`
+    // );
+
+    // res.send(pdfBuffer);
+    return res.status(200).json({filename, isOk:true})
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: "Failed to generate PDF." });
+  }
+};
+
+
+
+  
+
+exports.downloadAllCouponsPDF = async (req, res) => {
+  try {
+    // Fetch all active CouponAssign documents
+    const couponAssigns = await CouponAssign.find({ isActive: true })
+      .populate('influencer')
+      .populate('coupon')
+      .populate('branch')
+      .exec();
+
+    if (!couponAssigns.length) {
+      return res.status(404).json({ message: "No active coupon assignments found." });
+    }
+
+    // Initialize archive
+    const archive = archiver('zip', {
+      zlib: { level: 9 }, // Maximum compression
+    });
+
+    // Set response headers for ZIP file
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=coupons_${Date.now()}.zip`
+    );
+
+    // Pipe archive data to the response
+    archive.pipe(res);
+
+    // Generate PDFs for each coupon and append to archive
+    for (const couponAssign of couponAssigns) {
+      const { uniqueCouponCode, influencer, coupon, numberOfCoupons, branch, qrCodeUrl, isActive } = couponAssign;
+
+      // Initialize a new PDF document
+      const doc = new PDFDocument();
+      let buffers = [];
+
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => {
+        const pdfData = Buffer.concat(buffers);
+        archive.append(pdfData, { name: `coupon_${uniqueCouponCode}.pdf` });
+      });
+
+      // Add content to PDF
+      doc.fontSize(20).text('Coupon Details', { align: 'center' });
+      doc.moveDown();
+
+      doc.fontSize(12).text(`Influencer: ${influencer.name}`);
+      doc.text(`Coupon Code: ${coupon.couponCode}`);
+      doc.text(`Number of Coupons: ${numberOfCoupons}`);
+      doc.text(`Unique Coupon Code: ${uniqueCouponCode}`);
+      doc.text(
+        `Applicable Branches: ${branch
+          .map((b) => b.branchName)
+          .join(', ')}`
+      );
+      doc.text(`Is Active: ${isActive ? 'Yes' : 'No'}`);
+
+      doc.moveDown();
+
+      // Add QR Code Image
+      const qrCodePath = path.join(__dirname, '../../', qrCodeUrl);
+      if (fs.existsSync(qrCodePath)) {
+        doc.text('QR Code:');
+        doc.image(qrCodePath, { fit: [150, 150], align: 'center' });
+      } else {
+        doc.text('QR Code not available.');
+      }
+
+      // Finalize PDF
+      doc.end();
+    }
+
+    // Finalize the archive
+    archive.finalize();
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: 'Failed to generate ZIP file.' });
+  }
+};
+
+
+
+
+
+
+
+
 
 
 
