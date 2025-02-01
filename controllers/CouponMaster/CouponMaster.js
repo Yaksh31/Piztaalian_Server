@@ -82,7 +82,7 @@ exports.createCouponMaster = async (req, res) => {
 
 exports.listCouponMaster = async (req, res) => {
   try {
-    const list = await CouponMaster.find().sort({ productName: 1 }).exec();
+    const list = await CouponMaster.find({isActive:true}).sort({ productName: 1 }).exec();
     res.json(list);
   } catch (error) {
     return res.status(400).send(error);
@@ -141,29 +141,9 @@ exports.listCouponMasterByParams = async (req, res) => {
           $match: {
             $or: [
               {
-                branchName: { $regex: match, $options: "i" },
+                couponCode: { $regex: match, $options: "i" },
               },
-              {
-                address: { $regex: match, $options: "i" },
-              },
-              {
-                area: { $regex: match, $options: "i" },
-              },
-              {
-                state: { $regex: match, $options: "i" },
-              },
-              {
-                country: { $regex: match, $options: "i" },
-              },
-              {
-                phone: { $regex: match, $options: "i" },
-              },
-              {
-                email: { $regex: match, $options: "i" },
-              },
-              {
-                phone: { $regex: match, $options: "i" },
-              },
+              
             ],
           },
         },

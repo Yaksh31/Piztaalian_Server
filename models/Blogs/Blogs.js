@@ -10,37 +10,37 @@ const BlogsSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    blogThumnailDesc: {
-      type: String,
+    // blogThumnailDesc: {
+    //   type: String,
 
-      required: true,
-    },
+    //   required: true,
+    // },
     blogImage: {
       type: String,
     },
-    views: {
-      type: Number,
-      default: 0,
-    },
-    likes: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Users",
-        default: [],
-      },
-    ],
-    comments: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "BlogComment",
-        default: [],
-      },
-    ],
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "Users",
-      required: true,
-    },
+    // views: {
+    //   type: Number,
+    //   default: 0,
+    // },
+    // likes: [
+    //   {
+    //     type: Schema.Types.ObjectId,
+    //     ref: "Users",
+    //     default: [],
+    //   },
+    // ],
+    // comments: [
+    //   {
+    //     type: Schema.Types.ObjectId,
+    //     ref: "BlogComment",
+    //     default: [],
+    //   },
+    // ],
+    // userId: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "Users",
+    //   required: true,
+    // },
     IsActive: {
       type: Boolean,
     },

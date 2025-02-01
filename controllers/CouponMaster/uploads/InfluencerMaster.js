@@ -49,7 +49,7 @@ exports.createInfluencer = async (req, res) => {
 
 exports.listInfluencer = async (req, res) => {
   try {
-    const list = await Influencer.find().sort({ createdAt: -1 }).exec();
+    const list = await Influencer.find({IsActive:true}).sort({ createdAt: -1 }).exec();
     res.json(list);
   } catch (error) {
     return res.status(400).send(error);
