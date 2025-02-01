@@ -110,15 +110,15 @@ exports.topPopularPosts = async (req, res) => {
           _id: 1,
           blogTitle: 1,
           blogDesc: 1,
-          blogThumnailDesc: 1,
+          // blogThumnailDesc: 1,
           blogImage: 1,
-          views: 1,
-          likesCount: { $size: "$likes" }, // Calculate the number of likes
+          // views: 1,
+          // likesCount: { $size: "$likes" }, // Calculate the number of likes
         },
       },
-      {
-        $sort: { likesCount: -1 }, // Sort in descending order based on likesCount
-      },
+      // {
+      //   $sort: { likesCount: -1 }, // Sort in descending order based on likesCount
+      // },
       {
         $limit: 5, // Limit to 5 documents
       },
@@ -144,32 +144,32 @@ exports.createBlogs = async (req, res) => {
     let {
       blogTitle,
       blogDesc,
-      likes,
-      blogThumnailDesc,
-      views,
-      comments,
-      userId,
+      // likes,
+      // blogThumnailDesc,
+      // views,
+      // comments,
+      // userId,
       IsActive,
     } = req.body;
 
-    let like;
-    let comment;
-    if (likes == undefined || likes == null || likes == "") {
-      like = [];
-    }
-    if (comments == undefined || comments == null || comments == "") {
-      comment = [];
-    }
+    // let like;
+    // let comment;
+    // if (likes == undefined || likes == null || likes == "") {
+    //   like = [];
+    // }
+    // if (comments == undefined || comments == null || comments == "") {
+    //   comment = [];
+    // }
 
     const add = await new Blogs({
       blogTitle: blogTitle,
       blogImage: blogImage,
       blogDesc: blogDesc,
-      blogThumnailDesc: blogThumnailDesc,
-      views: views,
-      likes: like,
-      comments: comment,
-      userId: userId,
+      // blogThumnailDesc: blogThumnailDesc,
+      // views: views,
+      // likes: like,
+      // comments: comment,
+      // userId: userId,
       IsActive: IsActive,
     }).save();
     res.status(200).json({ isOk: true, data: add, message: "" });

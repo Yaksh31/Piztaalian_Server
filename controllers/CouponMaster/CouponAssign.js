@@ -8,6 +8,8 @@ const QRCode = require("qrcode");
 const CouponAssign = require ("../../models/CouponMaster/CouponAssign")
 const archiver = require('archiver');
 const PDFDocument = require('pdfkit');
+const puppeteer = require("puppeteer");
+const __basedir = path.resolve();
 
 
 
@@ -348,7 +350,7 @@ exports.removeCouponAssign = async (req, res) => {
       const uniqueCouponCode  = req.params._id;
   
       if (!uniqueCouponCode) {
-        return res.status(400).json({ message: "Unique coupon code is required." });
+        return res.status(201).json({ message: "Unique coupon code is required." });
       }
   
       // Fetch the coupon assignment by uniqueCouponCode
@@ -359,12 +361,23 @@ exports.removeCouponAssign = async (req, res) => {
         .exec();
   
       if (!couponAssign) {
-        return res.status(404).json({ message: "Coupon not found." });
+        return res.status(201).json({ message: "Coupon not found." });
       }
+
+      if (!couponAssign.isActive) {
+        return res.status(201).json({ message: "Coupon is inactive and cannot be redeemed." });
+      }
+
+      const currentDate = new Date();
+    if (currentDate > couponAssign.validUntil) {
+      return res.status(201).json({ message: "Coupon has expired and cannot be redeemed." });
+    }
+
+  
   
       // Check if numberOfCoupons > 0
       if (couponAssign.numberOfCoupons <= 0) {
-        return res.status(400).json({ message: "Coupon already redeemed or no more uses left." });
+        return res.status(201).json({ message: "Coupon already redeemed or no more uses left." });
       }
   
       // Decrement the number of available coupons
@@ -394,7 +407,7 @@ exports.removeCouponAssign = async (req, res) => {
 //       .populate('qrCodeUrl')
 //       .exec();sj
 
-const puppeteer = require("puppeteer");
+
 
 exports.downloadCouponPDF = async (req, res) => {
   try {
@@ -590,7 +603,7 @@ exports.downloadCouponPDF = async (req, res) => {
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
     const uploaddir = `${__basedir}/uploads`;
-    const filename = "poojan.pdf"
+    const filename = "piztaalian.pdf"
     const filePath = path.join(uploaddir, filename)
 
     const pdfBuffer = await page.pdf({
@@ -623,79 +636,246 @@ exports.downloadAllCouponsPDF = async (req, res) => {
   try {
     // Fetch all active CouponAssign documents
     const couponAssigns = await CouponAssign.find({ isActive: true })
-      .populate('influencer')
-      .populate('coupon')
-      .populate('branch')
+      .populate("influencer")
+      .populate("coupon")
+      .populate("branch")
       .exec();
 
     if (!couponAssigns.length) {
       return res.status(404).json({ message: "No active coupon assignments found." });
     }
 
-    // Initialize archive
-    const archive = archiver('zip', {
-      zlib: { level: 9 }, // Maximum compression
+    // Launch Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Useful for certain hosting environments
     });
+    const page = await browser.newPage();
 
-    // Set response headers for ZIP file
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=coupons_${Date.now()}.zip`
-    );
+    // Start building combined HTML
+    let combinedHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>All Coupons</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          .coupon-container {
+            background: lightblue;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            page-break-after: always; /* Ensures each coupon starts on a new page */
+          }
+          .coupon {
+            width: 100%;
+            max-width: 500px;
+            height: 200px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: auto;
+            filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
+            display: flex;
+            align-items: stretch;
+            position: relative;
+            text-transform: uppercase;
+          }
+          .coupon::before,
+          .coupon::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            z-index: -1;
+          }
+          .coupon::before {
+            left: 0;
+            background-image: radial-gradient(circle at 0 50%, transparent 17px, #cf2027 18px);
+          }
+          .coupon::after {
+            right: 0;
+            background-image: radial-gradient(circle at 100% 50%, transparent 18px, #cf2027 19px);
+          }
+          .coupon > div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .left {
+            border-right: 2px dashed rgba(255, 255, 255, 0.71);
+            width: 23%;
+            padding: 0px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          .left div {
+            transform: rotate(-90deg);
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 10px;
+            text-align: center;
+          }
+          .center {
+            width: 54%;
+            text-align: center;
+            padding: 15px;
+            background-color: #cf2027;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+          }
+          .p-2 {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .coupon-image {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            height: 90px;
+            width: auto;
+            margin-bottom: 10px;
+          }
+          .right {
+            background-image: radial-gradient(circle at 100% 50%, transparent 17px, #fff 18px);
+            width: 23%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0px;
+          }
+          .right div {
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            transform: rotate(-90deg);
+            letter-spacing: 2px;
+          }
+          .center h2 {
+            border-radius: 5px;
+            background: #000;
+            color: #fff;
+            margin: 0;
+            font-size: 25px;
+            white-space: nowrap;
+            display: inline-block;
+            padding: 5px;
+          }
+          .center p {
+            font-size: 15px;
+            margin: 5px 0;
+            color: #fff;
+          }
+          .left a {
+            text-decoration: none;
+            color: #fff;
+          }
+          .logo {
+            background: #fff;
+            border-radius: 10px;
+            padding: 5px;
+            margin-bottom: 15px;
+          }
+          .p-2 img {
+            height: 80px;
+            width: 80px;
+          }
+          .center small {
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0;
+            padding-bottom: 10px;
+            color: #fff;
+          }
+        </style>
+      </head>
+      <body>
+    `;
 
-    // Pipe archive data to the response
-    archive.pipe(res);
-
-    // Generate PDFs for each coupon and append to archive
+    // Iterate over each coupon and append its HTML
     for (const couponAssign of couponAssigns) {
-      const { uniqueCouponCode, influencer, coupon, numberOfCoupons, branch, qrCodeUrl, isActive } = couponAssign;
+      const qrCodePath = path.join(__basedir, 'uploads', couponAssign.qrCodeUrl);
+      const qrCodeBase64 = `http://localhost:8001/${couponAssign.qrCodeUrl}`
+      const couponHtml = `
+        <div class="coupon-container">
+          <div class="coupon">
+            <div class="left">
+              <div class="text-center">
+                Enjoy Your Gift From <br />
+                <a href="https://instagram.com/${couponAssign.influencer.instagram}" target="_blank" rel="noopener noreferrer">
+                  @${couponAssign.influencer.instagram}
+                </a>
+              </div>
+            </div>
+            <div class="center">
+              <div class="p-2">
+                <div class="coupon-image">
+                  <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
+                  <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
+                </div>
+                <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
+                <p>${couponAssign.coupon.couponDescription}</p>
+                <small>Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}</small>
+              </div>
+            </div>
+            <div class="right">
+              <div>${couponAssign.uniqueCouponCode}</div>
+            </div>
+          </div>
+        </div>
+      `;
 
-      // Initialize a new PDF document
-      const doc = new PDFDocument();
-      let buffers = [];
-
-      doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => {
-        const pdfData = Buffer.concat(buffers);
-        archive.append(pdfData, { name: `coupon_${uniqueCouponCode}.pdf` });
-      });
-
-      // Add content to PDF
-      doc.fontSize(20).text('Coupon Details', { align: 'center' });
-      doc.moveDown();
-
-      doc.fontSize(12).text(`Influencer: ${influencer.name}`);
-      doc.text(`Coupon Code: ${coupon.couponCode}`);
-      doc.text(`Number of Coupons: ${numberOfCoupons}`);
-      doc.text(`Unique Coupon Code: ${uniqueCouponCode}`);
-      doc.text(
-        `Applicable Branches: ${branch
-          .map((b) => b.branchName)
-          .join(', ')}`
-      );
-      doc.text(`Is Active: ${isActive ? 'Yes' : 'No'}`);
-
-      doc.moveDown();
-
-      // Add QR Code Image
-      const qrCodePath = path.join(__dirname, '../../', qrCodeUrl);
-      if (fs.existsSync(qrCodePath)) {
-        doc.text('QR Code:');
-        doc.image(qrCodePath, { fit: [150, 150], align: 'center' });
-      } else {
-        doc.text('QR Code not available.');
-      }
-
-      // Finalize PDF
-      doc.end();
+      combinedHtml += couponHtml;
     }
 
-    // Finalize the archive
-    archive.finalize();
+    combinedHtml += `
+      </body>
+      </html>
+    `;
+
+    // Set the combined HTML content
+    await page.setContent(combinedHtml, { waitUntil: "networkidle0" });
+
+    // Define the upload directory and filename
+    const uploaddir = path.join(__basedir, 'uploads');
+    const filename = `all_coupons.pdf`;
+    const filePath = path.join(uploaddir, filename);
+
+    // Ensure the uploads directory exists
+    if (!fs.existsSync(uploaddir)) {
+      fs.mkdirSync(uploaddir, { recursive: true });
+    }
+
+    // Generate PDF and save to filePath
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      path: filePath, // Save the PDF to the server
+      printBackground: true, // Ensure background colors render
+    });
+
+    await browser.close();
+
+    // Generate the file URL
+    const fileUrl = `${process.env.REACT_APP_API_URL_COFFEE}/uploads/${filename}`;
+
+    // Respond with the file URL
+    return res.status(200).json({ filename, fileUrl, isOk: true });
   } catch (err) {
     console.error(err);
-    res.status(500).send({ error: 'Failed to generate ZIP file.' });
+    res.status(500).send({ error: "Failed to generate PDF." });
   }
 };
 
