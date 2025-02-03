@@ -1,11 +1,12 @@
 // 1. Import required modules
+const UserMaster = require("../../models/UserMaster/UserMaster");
 const User = require("../../models/UserMaster/UserMaster");
 const bcrypt = require("bcrypt");
 
 // 2. GET a single user
 exports.getUserMaster = async (req, res) => {
   try {
-    const user = await User.findById(req.params._id).select("-password").exec();
+    const user = await User.findById(req.params._id).exec();
     if (!user) {
       return res.status(404).json({ isOk: false, message: "User not found" });
     }
@@ -18,13 +19,36 @@ exports.getUserMaster = async (req, res) => {
 // 3. CREATE a new user
 exports.createUserMaster = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, isActive, addresses } =
+    const { firstName, lastName, email, password, phone, isActive, addresses } =
       req.body;
+    console.log(">>>>>", req.body);
 
     if (!firstName || !lastName || !email || !password) {
       return res
         .status(400)
-        .json({ isOk: false, message: "All fields are required" });
+        .json({ isOk: false, message: "All fields are required!!" });
+    }
+
+    // Address validation
+    if (!addresses || addresses.length === 0) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "At least one address is required" });
+    }
+
+    const address = addresses[0];
+    console.log(address);
+    if (
+      !address.addressTitle ||
+      !address.address ||
+      !address.area ||
+      !address.city ||
+      !address.state ||
+      !address.country
+    ) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "All address fields are required" });
     }
 
     const emailExists = await User.findOne({ email }).exec();
@@ -34,13 +58,21 @@ exports.createUserMaster = async (req, res) => {
         .json({ isOk: false, message: "Email already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Ensure that at least one address is marked as default.
+    // If none is marked as default, mark the first one as default.
+    const defaultFound = addresses.some(
+      (addr) => addr.isDefault === true || addr.isDefault === "true"
+    );
+    if (!defaultFound) {
+      addresses[0].isDefault = true;
+    }
 
     const newUser = new User({
       firstName,
       lastName,
       email,
-      password: hashedPassword,
+      password,
+      phone,
       isActive,
       addresses: addresses || [],
     });
@@ -61,7 +93,7 @@ exports.createUserMaster = async (req, res) => {
 exports.listUserMaster = async (req, res) => {
   try {
     const users = await User.find()
-      .select("-password")
+
       .sort({ createdAt: -1 })
       .exec();
     res.json({ isOk: true, data: users });
@@ -78,6 +110,50 @@ exports.listUserMasterByParams = async (req, res) => {
     let query = [
       {
         $match: { isActive: isActive },
+      },
+
+      {
+        $lookup: {
+          from: "countries", // Replace with your actual collection name
+          localField: "addresses.country",
+          foreignField: "_id",
+          as: "countryData",
+        },
+      },
+      {
+        $lookup: {
+          from: "states", // Replace with your actual collection name
+          localField: "addresses.state",
+          foreignField: "_id",
+          as: "stateData",
+        },
+      },
+      {
+        $lookup: {
+          from: "cities", // Replace with your actual collection name
+          localField: "addresses.city",
+          foreignField: "_id",
+          as: "cityData",
+        },
+      },
+      // Unwind the arrays created by lookups
+      {
+        $unwind: {
+          path: "$countryData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $unwind: {
+          path: "$stateData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $unwind: {
+          path: "$cityData",
+          preserveNullAndEmptyArrays: true,
+        },
       },
 
       {
@@ -114,27 +190,32 @@ exports.listUserMasterByParams = async (req, res) => {
         },
       },
     ];
+
     if (match) {
-      query = [
-        {
-          $match: {
-            $or: [
-              {
-                firstName: { $regex: match, $options: "i" },
-              },
-              {
-                lastName: { $regex: match, $options: "i" },
-              },
-              {
-                email: { $regex: match, $options: "i" },
-              },
-              //  {
-              //    password: { $regex: match, $options: "i" },
-              //  },
-            ],
-          },
+      // Define the search match stage with lookup fields for city, state, and country
+      const searchMatchStage = {
+        $match: {
+          $or: [
+            { firstName: { $regex: match, $options: "i" } },
+            { lastName: { $regex: match, $options: "i" } },
+            { email: { $regex: match, $options: "i" } },
+            {
+              phone: { $regex: match, $options: "i" },
+            },
+            //  { password: { $regex: match, $options: "i" } }, // commented out as before
+            { "addresses.addressTitle": { $regex: match, $options: "i" } },
+            { "addresses.address": { $regex: match, $options: "i" } },
+            // UPDATED: Search using lookup fields instead of raw ObjectIds
+            { "cityData.CityName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            { "stateData.StateName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            { "countryData.CountryName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            { "addresses.area": { $regex: match, $options: "i" } },
+          ],
         },
-      ].concat(query);
+      };
+
+      // Insert the search stage after the lookups/unwinds (after index 6)
+      query.splice(7, 0, searchMatchStage);
     }
 
     if (sorton && sortdir) {
@@ -167,13 +248,22 @@ exports.listUserMasterByParams = async (req, res) => {
 // 6. UPDATE a user
 exports.updateUserMaster = async (req, res) => {
   try {
-    if (req.body.password) {
-      req.body.password = await bcrypt.hash(req.body.password, 10);
-    }
+    // const updatedData = req.body;
+
+    // // If addresses are being updated, ensure at least one is default.
+    // if (updatedData.addresses && updatedData.addresses.length > 0) {
+    //   const defaultFound = updatedData.addresses.some(
+    //     (addr) => addr.isDefault === true || addr.isDefault === "true"
+    //   );
+    //   if (!defaultFound) {
+    //     updatedData.addresses[0].isDefault = true;
+    //   }
+    // }
+
     const updatedUser = await User.findByIdAndUpdate(req.params._id, req.body, {
       new: true,
       runValidators: true,
-    }).select("-password");
+    });
 
     if (!updatedUser) {
       return res.status(404).json({ isOk: false, message: "User not found" });
@@ -211,7 +301,7 @@ exports.userLoginMaster = async (req, res) => {
       return res.status(401).json({ isOk: false, message: "User not found" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    //const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res
         .status(401)

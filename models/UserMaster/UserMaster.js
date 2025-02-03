@@ -16,16 +16,19 @@ const AddressSchema = new Schema({
     required: [true, "Area is required"],
   },
   city: {
-    type: String,
-    required: [true, "City is required"],
+    type: mongoose.Schema.Types.ObjectId, // Reference to City collection
+    ref: "City",
+    required: true,
   },
   state: {
-    type: String,
-    required: [true, "State is required"],
+    type: mongoose.Schema.Types.ObjectId, // Reference to State collection
+    ref: "State",
+    required: true,
   },
   country: {
-    type: String,
-    required: [true, "Country is required"],
+    type: mongoose.Schema.Types.ObjectId, // Reference to Country collection
+    ref: "Country",
+    required: true,
   },
 });
 
@@ -44,11 +47,18 @@ const UserMasterSchema = new Schema(
       required: [true, "Password is required"],
       // Remember to hash the password before saving to the database
     },
+    phone: {
+      type: String,
+      required: true,
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
       unique: true, // Enforces unique emails
-      // Add email format validation if desired
+      match: [
+        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        "Please enter a valid email address",
+      ],
     },
     addresses: {
       type: [AddressSchema],
