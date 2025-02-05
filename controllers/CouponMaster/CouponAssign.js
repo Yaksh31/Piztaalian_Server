@@ -388,6 +388,7 @@ exports.removeCouponAssign = async (req, res) => {
       await couponAssign.save();
   
       res.status(200).json({
+        isOk:true,
         message: "Coupon redeemed successfully",
         data: couponAssign,
       });
@@ -426,8 +427,12 @@ exports.downloadCouponPDF = async (req, res) => {
       return res.status(404).json({ message: "Coupon assignment not found." });
     }
 
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Useful for certain hosting environments
+    });
     const page = await browser.newPage();
+
 
     const qrCodePath = path.join(__basedir, couponAssign.qrCodeUrl);
     const qrCodeBase64 = fs.existsSync(qrCodePath)
@@ -449,7 +454,7 @@ exports.downloadCouponPDF = async (req, res) => {
       box-sizing: border-box;
     }
     .coupon-container {
-      background: lightblue;
+      background: white;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -586,7 +591,7 @@ exports.downloadCouponPDF = async (req, res) => {
         <div class="p-2">
           <div class="coupon-image">
             <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
-            <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
+            <img src="${process.env.REACT_APP_SERVER}/${couponAssign.qrCodeUrl}" width="64.5" class="logo mb-2" alt="QR Code" />
           </div>
           <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
           <p>${couponAssign.coupon.couponDescription}</p>
@@ -601,13 +606,15 @@ exports.downloadCouponPDF = async (req, res) => {
 </body>
 </html>
 `;
-
-    console.log(`${__basedir}/uploads/${couponAssign.qrCodeUrl}`)
+ 
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
     const uploaddir = `${__basedir}/uploads`;
     const filename = "piztaalian.pdf"
     const filePath = path.join(uploaddir, filename)
+    if (!fs.existsSync(uploaddir)) {
+      fs.mkdirSync(uploaddir, { recursive: true });
+    }
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -624,7 +631,9 @@ exports.downloadCouponPDF = async (req, res) => {
     // );
 
     // res.send(pdfBuffer);
-    return res.status(200).json({filename, isOk:true})
+    const fileUrl = `${process.env.REACT_APP_SERVER}/uploads/${filename}`;
+
+    return res.status(200).json({filename, isOk:true,fileUrl})
   } catch (err) {
     console.error(err);
     res.status(500).send({ error: "Failed to generate PDF." });
@@ -670,7 +679,7 @@ exports.downloadAllCouponsPDF = async (req, res) => {
             box-sizing: border-box;
           }
           .coupon-container {
-            background: lightblue;
+            background: white;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -811,7 +820,7 @@ exports.downloadAllCouponsPDF = async (req, res) => {
     // Iterate over each coupon and append its HTML
     for (const couponAssign of couponAssigns) {
       const qrCodePath = path.join(__basedir, 'uploads', couponAssign.qrCodeUrl);
-      const qrCodeBase64 = `http://localhost:8001/${couponAssign.qrCodeUrl}`
+      const qrCodeBase64 = `${process.env.REACT_APP_SERVER}/${couponAssign.qrCodeUrl}`
       const couponHtml = `
         <div class="coupon-container">
           <div class="coupon">
@@ -1168,6 +1177,9 @@ exports.sendCouponPDF = async (req, res) => {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      tls: {
+        rejectUnauthorized: false
+    }
     });
 
     let mailOptions = {

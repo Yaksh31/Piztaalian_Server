@@ -18,9 +18,21 @@ const CouponMsterSchema = new mongoose.Schema(
             type: Date,
             required: true,
         },
+        startTime:{
+            type:Date
+
+        },
+        endTime:{
+            type:Date
+
+        },
         couponDescription: {
             type: String,
         },
+        
+        termsAndConditions: {
+            type: String,
+          },
         
         byBranch: {
             type: mongoose.Schema.Types.ObjectId,

@@ -15,18 +15,15 @@ exports.createCouponMaster = async (req, res) => {
   try {
     const {
       couponCode,
-      // influencerName,
-      // influencerInstagram,
-      // influencerYT,
       discountPercentage,
       maxDiscount,
-      // numberofCouponsAlloted,
       expiryDate,
       couponDescription,
-      // applicableBranch,
-      // isSoldOut,
       isActive,
-      byBranch
+      byBranch,
+      startTime,
+      endTime,
+      termsAndConditions
     } = req.body;
 
     const data = await CouponMaster.findOne({ couponCode }).exec();
@@ -48,16 +45,13 @@ exports.createCouponMaster = async (req, res) => {
     // Create and save the new coupon
     const newCoupon = new CouponMaster({
       couponCode,
-      // influencerName,
-      // influencerInstagram,
-      // influencerYT,
       discountPercentage,
       maxDiscount,
-      // numberofCouponsAlloted,
       expiryDate,
       couponDescription,
-      // applicableBranch,
-      // isSoldOut,
+      startTime,
+      endTime,
+      termsAndConditions,
       isActive,
       byBranch: byBranch || null,
     });
