@@ -24,6 +24,7 @@ exports.getCouponAssign = async (req, res) => {
       .populate('influencer')
       .populate('coupon')
       .populate('qrCodeUrl')
+      .populate('branch')
       .exec();
 
     if (!couponAssign) {
@@ -102,7 +103,7 @@ exports.createCouponAssign = async (req, res) => {
       // Generate QR code using the _id
       const qrFileName = `${savedCouponAssign._id}.png`;
       const qrFilePath = path.join(uploadsFolder, qrFileName);
-      const qrData = `${process.env.REACT_APP_API_URL}/redeemcoupon/${savedCouponAssign._id}`; // Ensure this URL is correct and accessible
+      const qrData = `${process.env.REACT_APP_API_URL_BRANCH}/redeemcoupon/${savedCouponAssign._id}`; // Ensure this URL is correct and accessible
 
       await QRCode.toFile(qrFilePath, qrData);
 

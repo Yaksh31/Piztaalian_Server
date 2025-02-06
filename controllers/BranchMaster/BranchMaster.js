@@ -307,12 +307,7 @@ exports.branchLogin = async (req, res) => {
       isOk: true,
       message: "Login successful",
 
-      data: {
-        id: branch._id,
-        email: branch.email,
-        branchName: branch.branchName,
-        role: "branch",
-      },
+      data:branch
     });
   } catch (error) {
     console.error(error);
