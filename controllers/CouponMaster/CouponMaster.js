@@ -1,7 +1,70 @@
 const CouponMaster = require("../../models/CouponMaster/CouponMaster");
+const Influencer = require("../../models/CouponMaster/InfluencerMaster")
 const fs = require("fs");
+const xlsx = require("xlsx");
 const QRCode = require("qrcode");
-const path = require("path")
+const path = require("path");
+
+
+exports.uploadExcel = async (req, res) => {
+  try {
+    // Ensure a file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ isOk: false, message: "No file uploaded" });
+    }
+
+    // Read the uploaded file from disk
+    const filePath = req.file.path;
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0]; // use the first sheet
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Convert the worksheet to JSON
+    const jsonData = xlsx.utils.sheet_to_json(worksheet);
+
+    // Map Excel rows to influencer objects
+    const influencers = jsonData.map((row) => ({
+      name: row.name || "",
+      phone: row.phone || "",
+      email: row.email, // email is required, so ensure your Excel file includes it
+      password: row.password || "",
+      instagram: row.instagram || "",
+      youtube: row.youtube || "",
+      IsActive: typeof row.IsActive === "string"
+        ? row.IsActive.toLowerCase() === "true"
+        : Boolean(row.IsActive),
+    }));
+
+    // Insert the influencers into the database (bulk insert)
+    const insertedRecords = await Influencer.insertMany(influencers);
+
+    // Optionally, delete the uploaded file after processing
+    fs.unlink(filePath, (err) => {
+      if (err) console.error("Error deleting file:", err);
+    });
+
+    return res.status(200).json({
+      isOk: true,
+      data: insertedRecords,
+      message: "Excel file processed successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      isOk: false,
+      message: "Error processing Excel file",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
 exports.getCouponMaster = async (req, res) => {
   try {
     const find = await CouponMaster.findOne({ _id: req.params._id }).exec();
