@@ -1,7 +1,6 @@
 //category name
 //is active
 
-
 const mongoose = require("mongoose");
 
 const CategoryMasterSchema = new mongoose.Schema(
@@ -10,7 +9,9 @@ const CategoryMasterSchema = new mongoose.Schema(
       type: String,
       unique: true, // Ensures categoryName is unique
       required: true, // Optional: Ensures categoryName is always provided
-      
+    },
+    bannerImage: {
+      type: String,
     },
     IsActive: {
       type: Boolean,
@@ -21,4 +22,3 @@ const CategoryMasterSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("CategoryMaster", CategoryMasterSchema);
-

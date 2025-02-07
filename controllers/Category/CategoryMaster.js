@@ -1,4 +1,5 @@
 const CategoryMaster = require("../../models/Category/CategoryMaster");
+const fs = require("fs");
 
 exports.getCategoryMaster = async (req, res) => {
   try {
@@ -11,7 +12,21 @@ exports.getCategoryMaster = async (req, res) => {
 
 exports.createCategoryMaster = async (req, res) => {
   try {
-    const add = await new CategoryMaster(req.body).save();
+    if (!fs.existsSync(`${__basedir}/uploads/menuCategoryImages`)) {
+      fs.mkdirSync(`${__basedir}/uploads/menuCategoryImages`);
+    }
+
+    let bannerImage = req.file
+      ? `uploads/menuCategoryImages/${req.file.filename}`
+      : null;
+
+    let { categoryName, IsActive } = req.body;
+    const add = await new CategoryMaster({
+      categoryName,
+      bannerImage,
+      IsActive,
+    }).save();
+    //const add = await new CategoryMaster(req.body).save();
     res.json(add);
   } catch (err) {
     return res.status(400).send(err);
@@ -20,7 +35,9 @@ exports.createCategoryMaster = async (req, res) => {
 
 exports.listCategoryMaster = async (req, res) => {
   try {
-    const list = await CategoryMaster.find({ IsActive: true }).sort({ categoryName : 1 }).exec();
+    const list = await CategoryMaster.find({ IsActive: true })
+      .sort({ categoryName: 1 })
+      .exec();
     res.json(list);
   } catch (error) {
     return res.status(400).send(error);
@@ -124,9 +141,17 @@ exports.listCategoryMasterByParams = async (req, res) => {
 
 exports.updateCategoryMaster = async (req, res) => {
   try {
+    let bannerImage = req.file
+      ? `uploads/menuCategoryImages/${req.file.filename}`
+      : null;
+    let fieldvalues = { ...req.body };
+    if (bannerImage != null) {
+      fieldvalues.bannerImage = bannerImage;
+    }
     const update = await CategoryMaster.findOneAndUpdate(
       { _id: req.params._id },
-      req.body,
+      fieldvalues,
+     // req.body,
       { new: true }
     );
     res.json(update);
