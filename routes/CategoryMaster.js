@@ -12,8 +12,26 @@ const {
   removeCategoryMaster,
   listActiveCategories,
 } = require("../controllers/Category/CategoryMaster");
+const multer = require("multer");
 
-router.post("/auth/create/categoryMaster", catchAsync(createCategoryMaster));
+const multerStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/menuCategoryImages");
+  },
+  filename: (req, file, cb) => {
+    // const ext = file.mimetype.split("/")[1];
+    // cb(null, `${uuidv4()}-${Date.now()}.${ext}`);
+    cb(null, Date.now() + "_" + file.originalname);
+  },
+});
+
+const upload = multer({ storage: multerStorage });
+
+router.post(
+  "/auth/create/categoryMaster",
+  upload.single("myFile"),
+  catchAsync(createCategoryMaster)
+);
 
 router.get("/auth/list/categoryMaster", catchAsync(listCategoryMaster));
 
@@ -31,6 +49,7 @@ router.get("/auth/get/categoryMaster/:_id", catchAsync(getCategoryMaster));
 
 router.put(
   "/auth/update/categoryMaster/:_id",
+  upload.single("myFile"),
   catchAsync(updateCategoryMaster)
 );
 
