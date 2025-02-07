@@ -3,6 +3,19 @@ const express = require("express");
 const router = express.Router();
 
 const catchAsync = require("../utils/catchAsync");
+
+const multer = require("multer");
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/"); // Ensure this folder exists or change the path as needed
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
+});
+
+const upload = multer({ storage: storage });
+
 const {
   createInfluencer,
   listInfluencer,
@@ -11,21 +24,9 @@ const {
   updateInfluencer,
   removeInfluencer,
   userInfluencer,
+  uploadExcel
 } = require("../controllers/CouponMaster/uploads/InfluencerMaster");
-// const multer = require("multer");
 
-// const multerStorage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, "uploads/userImages");
-//   },
-//   filename: (req, file, cb) => {
-//     // const ext = file.mimetype.split("/")[1];
-//     // cb(null, `${uuidv4()}-${Date.now()}.${ext}`);
-//     cb(null, Date.now() + "_" + file.originalname);
-//   },
-// });
-
-// const upload = multer({ storage: multerStorage });
 router.post("/auth/create/Influencer", catchAsync(createInfluencer));
 
 router.get("/auth/list/Influencer", catchAsync(listInfluencer));
@@ -37,6 +38,13 @@ router.get("/auth/get/Influencer/:_id", catchAsync(getInfluencer));
 router.put("/auth/update/Influencer/:id", catchAsync(updateInfluencer));
 
 router.delete("/auth/remove/Influencer/:_id", catchAsync(removeInfluencer));
+
+router.post(
+    "/auth/CouponMaster/uploadExcel",
+    upload.single("excelFile"),
+    catchAsync(uploadExcel)
+  );
+
 
 // router.post("/adminLogin", catchAsync(userLoginAdmin));
 
