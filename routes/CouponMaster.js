@@ -5,16 +5,8 @@ const router = express.Router();
 const catchAsync = require("../utils/catchAsync");
 const CouponMaster = require("../models/CouponMaster/CouponMaster");
 
-const multer = require("multer");
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // Ensure this folder exists or change the path as needed
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
-const upload = multer({ storage: storage });
+
+
 
 const {
     createCouponMaster,
@@ -24,7 +16,8 @@ const {
     updateCouponMaster,
     removeCouponMaster,
     generateCouponQRCode,
-    uploadExcel
+    getCouponTerms,
+    
 } = require("../controllers/CouponMaster/CouponMaster");
 
 
@@ -44,11 +37,9 @@ router.put("/auth/update/CouponMaster/:_id",  catchAsync(updateCouponMaster)
 
 router.delete("/auth/remove/CouponMaster/:_id", catchAsync(removeCouponMaster)
 );
-router.post(
-    "/auth/CouponMaster/uploadExcel",
-    upload.single("excelFile"),
-    catchAsync(uploadExcel)
-  );
+
+router.get("/auth/:_id/terms", getCouponTerms);
+
 
 
 
