@@ -24,7 +24,9 @@ const {
   updateInfluencer,
   removeInfluencer,
   userInfluencer,
-  uploadExcel
+  uploadExcel,
+  influencerLogin,
+  
 } = require("../controllers/CouponMaster/uploads/InfluencerMaster");
 
 router.post("/auth/create/Influencer", catchAsync(createInfluencer));
@@ -44,6 +46,8 @@ router.post(
     upload.single("excelFile"),
     catchAsync(uploadExcel)
   );
+router.post("/influencer/login", catchAsync(influencerLogin))
+
 
 
 // router.post("/adminLogin", catchAsync(userLoginAdmin));
