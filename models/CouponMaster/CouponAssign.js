@@ -38,6 +38,22 @@ const CouponAssignSchema = new mongoose.Schema(
       default: true,
   },
   
+  redeemedHistory: [
+    {
+      branch: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Branches",
+        required: true,
+      },
+      redeemedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      redeemerName: { type: String },
+      redeemerPhone: { type: String },
+    },
+  ],
+  
   },
   { timestamps: true }
 );

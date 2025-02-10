@@ -394,6 +394,49 @@ exports.uploadExcel = async (req, res) => {
   }
 };
 
+exports.influencerLogin = async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Find influencer by email
+    const influencer = await Influencer.findOne({ email }).exec();
+
+    if (!influencer) {
+      return res.status(404).json({
+        isOk: false,
+        message: "Influencer not found",
+      });
+    }
+
+    // Verify password
+    if (influencer.password !== password) {
+      return res.status(401).json({
+        isOk: false,
+        message: "Invalid email or password",
+      });
+    }
+
+   
+
+    res.status(200).json({
+      isOk: true,
+      message: "Login successful",
+      data: influencer,
+      
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      isOk: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+
+
+
 
 
 

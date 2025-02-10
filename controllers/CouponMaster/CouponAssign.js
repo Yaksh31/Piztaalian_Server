@@ -10,6 +10,7 @@ const archiver = require('archiver');
 const PDFDocument = require('pdfkit');
 const nodemailer = require("nodemailer");
 const axios = require("axios");
+const XLSX = require("xlsx");
 
 const puppeteer = require("puppeteer");
 const __basedir = path.resolve();
@@ -311,9 +312,10 @@ exports.updateCouponAssign = async (req, res) => {
       return res.status(404).json({ message: "Coupon Assign not found" });
     }
 
-    const qrFileName = `${uniqueCouponCode}.png`;
+
+    const qrFileName = `${updatedCouponAssign._id}.png`;
     const qrFilePath = path.join(uploadsFolder, qrFileName);
-    const qrData = `${process.env.REACT_APP_API_URL}/redeemcoupon/${uniqueCouponCode}`;
+    const qrData = `${process.env.REACT_APP_API_URL_BRANCH}/redeemcoupon/${updatedCouponAssign._id}`;
 
     await QRCode.toFile(qrFilePath, qrData);
 
@@ -373,9 +375,23 @@ exports.redeemCoupon = async (req, res) => {
     }
 
     const currentDate = new Date();
-    if (currentDate > couponAssign.validUntil) {
+    if (couponAssign.coupon && couponAssign.coupon.expiryDate && currentDate > new Date(couponAssign.coupon.expiryDate)) {
       return res.status(201).json({ message: "Coupon has expired and cannot be redeemed." });
     }
+
+    const { branchId ,  redeemerName, redeemerPhone } = req.body;
+    if (!branchId) {
+      return res.status(400).json({ message: "Branch ID is required for redemption." });
+    }
+
+    // Record the redemption in the redeemedHistory array
+    couponAssign.redeemedHistory.push({
+      branch: branchId,
+      redeemedAt: new Date(),
+      redeemerName,
+      redeemerPhone
+    });
+
 
 
 
@@ -384,7 +400,6 @@ exports.redeemCoupon = async (req, res) => {
       return res.status(201).json({ message: "Coupon already redeemed or no more uses left." });
     }
 
-    // Decrement the number of available coupons
     couponAssign.numberOfCoupons -= 1;
     await couponAssign.save();
 
@@ -992,44 +1007,39 @@ exports.sendCouponPDF = async (req, res) => {
         .json({ error: "Missing required fields (email & uniqueCouponCode)" });
     }
 
+    // 1. Fetch the coupon assignment
     const couponAssign = await CouponAssign.findOne({ uniqueCouponCode })
       .populate("influencer")
       .populate("coupon")
       .populate("branch")
       .exec();
-    
     if (!couponAssign) {
       return res.status(404).json({ error: "Coupon not found." });
     }
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    // 2. Launch Puppeteer and generate the PDF (same as downloadCouponPDF)
+    const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
-    const qrCodeBase64 = `${process.env.REACT_APP_SERVER}/${couponAssign.qrCodeUrl}`;
+    // Prepare the QR code if present
+    const qrCodePath = path.join(__basedir, couponAssign.qrCodeUrl);
+    const qrCodeBase64 = fs.existsSync(qrCodePath)
+      ? `data:image/png;base64,${fs.readFileSync(qrCodePath).toString("base64")}`
+      : "";
 
+    // Create the HTML content (same styling as in downloadCouponPDF)
     const htmlContent = `
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>Coupon</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     .coupon-container {
-      font-family: "Montserrat", serif;
-      background: white;
+      background: lightblue;
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
       padding: 20px;
@@ -1047,8 +1057,7 @@ exports.sendCouponPDF = async (req, res) => {
       position: relative;
       text-transform: uppercase;
     }
-    .coupon::before,
-    .coupon::after {
+    .coupon::before, .coupon::after {
       content: "";
       position: absolute;
       top: 0;
@@ -1086,9 +1095,7 @@ exports.sendCouponPDF = async (req, res) => {
       padding: 15px;
       background-color: #cf2027;
     }
-    .p-2 {
-      padding: 0;
-    }
+    .p-2 { padding: 0; }
     .coupon-image {
       display: flex;
       flex-direction: row;
@@ -1147,17 +1154,6 @@ exports.sendCouponPDF = async (req, res) => {
       padding-bottom: 10px;
       color: #fff;
     }
-    .back {
-      margin-top: 40px;
-      height: auto !important;
-      min-height: 200px;
-    }
-    .back .center {
-      font-size: 10px;
-      text-align: left;
-      color: white;
-      text-transform: uppercase;
-    }
   </style>
 </head>
 <body>
@@ -1166,7 +1162,8 @@ exports.sendCouponPDF = async (req, res) => {
       <div class="left">
         <div class="text-center">
           Enjoy Your Gift From <br />
-          <a href="https://instagram.com/${couponAssign.influencer.instagram}" target="_blank" rel="noopener noreferrer">
+          <a href="https://instagram.com/${couponAssign.influencer.instagram}"
+            target="_blank" rel="noopener noreferrer">
             @${couponAssign.influencer.instagram}
           </a>
         </div>
@@ -1174,27 +1171,16 @@ exports.sendCouponPDF = async (req, res) => {
       <div class="center">
         <div class="p-2">
           <div class="coupon-image">
-            <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
+            <img src="${couponAssign.influencer.logoUrl ||
+      "https://www.piztaalian.com/assets/img/logo.png"
+      }" width="60" class="logo mb-2" alt="Company Logo" />
             <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
           </div>
           <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
           <p>${couponAssign.coupon.couponDescription}</p>
-          <small>Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}</small>
-        </div>
-      </div>
-      <div class="right">
-        <div>${couponAssign.uniqueCouponCode}</div>
-      </div>
-    </div>
-    <div class="coupon back">
-      <div class="left">
-        <div class="text-center">
-          Terms &amp; Conditions
-        </div>
-      </div>
-      <div class="center">
-        <div class="p-2">
-          ${couponAssign.coupon.termsAndConditions}
+          <small>
+            Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}
+          </small>
         </div>
       </div>
       <div class="right">
@@ -1206,15 +1192,13 @@ exports.sendCouponPDF = async (req, res) => {
 </html>
     `;
 
+    // 3. Render the HTML to the page
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
+    // 4. Save the PDF to disk
     const uploadsDir = path.join(__basedir, "uploads");
     const filename = "piztaalian.pdf";
     const filePath = path.join(uploadsDir, filename);
-
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
 
     await page.pdf({
       format: "A4",
@@ -1224,12 +1208,14 @@ exports.sendCouponPDF = async (req, res) => {
 
     await browser.close();
 
+    // 5. Verify the PDF file exists
     if (!fs.existsSync(filePath)) {
       return res
         .status(500)
         .json({ error: "PDF generation failed; file not found after create." });
     }
 
+    // 6. Use Nodemailer to send the brand-new PDF as an email attachment
     let transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -1257,14 +1243,128 @@ exports.sendCouponPDF = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
 
+    // 7. Return success
     return res.status(200).json({
       isOk: true,
-      message: "Latest PDF generated & emailed successfully.",
+      message: "Latest PDF generated & emailed successfully (no need to download first).",
     });
   } catch (error) {
     console.error("Error in sendCouponPDF:", error);
     return res
       .status(500)
       .json({ error: "Failed to generate/send email", details: error.message });
+  }
+};
+
+exports.influencerDashboard = async (req, res) => {
+  try {
+    // Get the logged-in influencer’s ID from the authentication middleware
+    const influencerId = req.params._id;
+
+    // Find all CouponAssign documents for this influencer
+    const couponAssigns = await CouponAssign.find({ influencer: influencerId })
+      .populate("coupon")
+      .populate("branch")
+      .populate({
+        path: "redeemedHistory.branch",
+        model: "Branches", // ensure this matches your branch model name
+      })
+      .exec();
+
+    // Map through each assignment to calculate values
+    const dashboardData = couponAssigns.map((assignment) => {
+      const redeemedCount = assignment.redeemedHistory.length;
+      // Calculate original count as current numberOfCoupons plus redeemed count
+      const originalCount = assignment.numberOfCoupons + redeemedCount;
+      return {
+        id: assignment._id,
+        uniqueCouponCode: assignment.uniqueCouponCode,
+        couponCode: assignment.coupon.couponCode,
+        discountPercentage: assignment.coupon.discountPercentage,
+        // Original total assigned coupons:
+        totalAssigned: originalCount,
+        // Coupons remaining:
+        remaining: assignment.numberOfCoupons,
+        redeemedCount,
+        redemptionDetails: assignment.redeemedHistory.map((record) => ({
+          branchId: record.branch?._id,
+          branchName: record.branch ? record.branch.branchName : "Unknown",
+          redeemedAt: record.redeemedAt,
+          redeemerName: record.redeemerName,       // Include redeemer's name
+          redeemerPhone: record.redeemerPhone,     // Include redeemer's phone
+        })),
+      };
+    });
+
+    return res.status(200).json({
+      isOk: true,
+      data: dashboardData,
+    });
+  } catch (error) {
+    console.error("Error in influencerDashboard:", error);
+    return res.status(500).json({
+      isOk: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+};
+
+
+exports.exportCouponRedeemDetails = async (req, res) => {
+  try {
+   
+    const couponAssignId = req.params._id;
+    if (!couponAssignId) {
+      return res.status(400).json({ message: "Coupon assignment ID is required." });
+    }
+
+    
+    const couponAssign = await CouponAssign.findById(couponAssignId)
+      .populate("coupon")
+      .populate("branch")
+      .populate({
+        path: "redeemedHistory.branch",
+        model: "Branches",
+      })
+      .exec();
+
+    if (!couponAssign) {
+      return res.status(404).json({ message: "Coupon assignment not found." });
+    }
+
+    
+    const rows = couponAssign.redeemedHistory.map((record, index) => ({
+      "Sr No": index + 1,
+      "Coupon Code": couponAssign.coupon.couponCode,
+      "Branch": record.branch ? record.branch.branchName : "Unknown",
+      "Redeemed At": record.redeemedAt ? record.redeemedAt.toLocaleString() : "",
+      "Redeemer Name": record.redeemerName || "",
+      "Redeemer Phone": record.redeemerPhone || "",
+    }));
+
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Redeem Details");
+
+   
+    const uploadsFolder = path.join(__basedir, "uploads");
+    if (!fs.existsSync(uploadsFolder)) {
+      fs.mkdirSync(uploadsFolder, { recursive: true });
+    }
+    const filename = "redeem-details.xlsx";
+    const filePath = path.join(uploadsFolder, filename);
+
+    
+    XLSX.writeFile(wb, filePath);
+
+    
+    const fileUrl = `${process.env.REACT_APP_SERVER}/uploads/${filename}`;
+
+    return res.status(200).json({ filename, isOk: true, fileUrl });
+  } catch (err) {
+    console.error("Error exporting Excel: ", err);
+    return res.status(500).json({ error: "Failed to export Excel file" });
   }
 };
