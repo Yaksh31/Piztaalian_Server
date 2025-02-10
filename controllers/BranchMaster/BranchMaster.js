@@ -44,40 +44,67 @@ exports.createBranch = async (req, res) => {
       isActive,
     } = req.body;
 
-    // Check if branchName or email already exists
-    const branchExists = await Branch.findOne({
-      $or: [{ branchName }, { email }],
-    }).exec();
-
-    if (branchExists) {
+    // Check if branch name exists
+    const branchNameExists = await Branch.findOne({ branchName }).exec();
+    if (branchNameExists) {
       return res.status(200).json({
         isOk: false,
-        message: "Branch name or email already exists",
-      });
-    } else {
-      // Create and save the new branch
-      const newBranch = new Branch({
-        branchName,
-        address,
-        area,
-        city,
-        state,
-        country,
-        phone,
-        email,
-        password, // Note: Ensure you hash the password in a real application
-        isActive,
-        branchImage,
-      });
-
-      const savedBranch = await newBranch.save();
-
-      res.status(200).json({
-        isOk: true,
-        data: savedBranch,
-        message: "Branch created successfully",
+        message: "Branch name already exists",
       });
     }
+
+    // Check if email exists
+    const emailExists = await Branch.findOne({ email }).exec();
+    if (emailExists) {
+      return res.status(200).json({
+        isOk: false,
+        message: "Email already exists",
+      });
+    }
+
+    // Check if phone number exists
+    const phoneExists = await Branch.findOne({ phone }).exec();
+    if (phoneExists) {
+      return res.status(200).json({
+        isOk: false,
+        message: "Phone number already exists",
+      });
+    }
+
+    // // Check if branchName or email already exists
+    // const branchExists = await Branch.findOne({
+    //   $or: [{ branchName }, { email },{phone}],
+    // }).exec();
+
+    // if (branchExists) {
+    //   return res.status(200).json({
+    //     isOk: false,
+    //     message: "Branch name or email already exists",
+    //   });
+    // }
+
+    // Create and save the new branch
+    const newBranch = new Branch({
+      branchName,
+      address,
+      area,
+      city,
+      state,
+      country,
+      phone,
+      email,
+      password, // Note: Ensure you hash the password in a real application
+      isActive,
+      branchImage,
+    });
+
+    const savedBranch = await newBranch.save();
+
+    res.status(200).json({
+      isOk: true,
+      data: savedBranch,
+      message: "Branch created successfully",
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).send({ error: err.message });
@@ -252,12 +279,58 @@ exports.updateBranch = async (req, res) => {
     if (bannerImage != null) {
       fieldvalues.bannerImage = bannerImage;
     }
+
+    // Extract email and phone to check uniqueness
+    const { email, phone, branchName } = req.body;
+
+    
+
+    // Check if branch name exists for another branch
+    const branchNameExists = await Branch.findOne({
+      branchName,
+      _id: { $ne: req.params._id },
+    }).exec();
+    if (branchNameExists) {
+      return res.status(200).json({
+        isOk: false,
+        message: "Branch name already exists",
+      });
+    }
+
+    // Check if email exists for another branch
+    const emailExists = await Branch.findOne({
+      email,
+      _id: { $ne: req.params._id },
+    }).exec();
+    if (emailExists) {
+      return res.status(200).json({
+        isOk: false,
+        message: "Email already exists",
+      });
+    }
+
+    // Check if phone number exists for another branch
+    const phoneExists = await Branch.findOne({
+      phone,
+      _id: { $ne: req.params._id },
+    }).exec();
+    if (phoneExists) {
+      return res.status(200).json({
+        isOk: false,
+        message: "Phone number already exists",
+      });
+    }
+
     const update = await Branch.findOneAndUpdate(
       { _id: req.params._id },
       fieldvalues,
       { new: true }
     );
-    res.json(update);
+    res.status(200).json({
+      isOk: true,
+      data: update,
+      message: "Branch updated successfully",
+    });
   } catch (err) {
     res.status(400).send(err);
   }
@@ -307,7 +380,7 @@ exports.branchLogin = async (req, res) => {
       isOk: true,
       message: "Login successful",
 
-      data:branch
+      data: branch,
     });
   } catch (error) {
     console.error(error);
