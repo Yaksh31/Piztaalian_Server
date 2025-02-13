@@ -2,6 +2,21 @@ const mongoose = require("mongoose");
 const CategoryMaster = require("../Category/CategoryMaster");
 const BranchMaster = require("../BranchMaster/BranchMaster");
 
+
+
+const variantSchema = new mongoose.Schema({
+  variantName: {
+    type: String,
+    
+  },
+  price: {
+    type: Number,
+    required: true
+  }
+  // You can add more fields here (like description, crust type, etc.)
+});
+
+
 const menuItemSchema = new mongoose.Schema({
   categoryName: {
     type: mongoose.Schema.Types.ObjectId,
@@ -39,13 +54,30 @@ const menuItemSchema = new mongoose.Schema({
     type: Boolean,
     default: true, 
   },
+  variants: [variantSchema],
+  toppings: [
+    {
+      toppingCategory: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ToppingCategory",
+        
+      },
+      toppings: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "ToppingMaster",
+          required: true
+        }
+      ]
+    }
+  ]
 });
 
 const menuMasterSchema = new mongoose.Schema(
   {
     branchName: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "BranchMaster",
+      ref: "Branches",
       required: true,
     },
     menuItem: [menuItemSchema],

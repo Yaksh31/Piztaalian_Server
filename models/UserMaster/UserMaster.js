@@ -2,35 +2,83 @@ const mongoose = require("mongoose");
 const { Schema, model } = mongoose;
 
 const AddressSchema = new Schema({
-  addressTitle: {
+  addressType: {
     type: String,
-    // required: [true, "Address title is required"], // Uncomment if you want this field to be mandatory
-    default: "Home",
+    enum: ["home", "office", "other"],
+    required: [true, "Address type is required"],
   },
-  address: {
+  buildingNumber: {
     type: String,
-    required: [true, "Address is required"],
+    required: [true, "House/Flat/Block number is required"],
+  },
+  landmark: {
+    type: String,
+    default: "",
+  },
+  phoneNumber: {
+    type: String,
+    required: [true, "Phone number is required"],
+  },
+  emailAddress: {
+    type: String,
+    required: [true, "Email address is required"],
+    match: [/\S+@\S+\.\S+/, "Please use a valid email address"],
   },
   area: {
     type: String,
     required: [true, "Area is required"],
   },
   city: {
-    type: mongoose.Schema.Types.ObjectId, // Reference to City collection
+    type: mongoose.Schema.Types.ObjectId,
     ref: "City",
-    required: true,
-  },
-  state: {
-    type: mongoose.Schema.Types.ObjectId, // Reference to State collection
-    ref: "State",
-    required: true,
+    required: [true, "City is required"],
   },
   country: {
-    type: mongoose.Schema.Types.ObjectId, // Reference to Country collection
+    type: mongoose.Schema.Types.ObjectId,
     ref: "Country",
-    required: true,
+    required: [true, "Country is required"],
   },
-});
+}, { timestamps: true });
+
+const CartItemSchema = new Schema(
+ {
+     menuItem: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "MenuMaster",
+       required: true,
+       default: null
+     },
+     quantity: {
+       type: Number,
+       required: true,
+       default: 1
+     },
+     branch: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "Branches",
+       required: true,
+       default: null
+     },
+     toppings: [
+       {
+         type: mongoose.Schema.Types.ObjectId,
+         ref: "ToppingMaster",
+         required: true,
+         default: null
+       }
+     ],
+     variant: {
+       type: mongoose.Schema.Types.ObjectId,
+       ref: "Variant",
+       default: null
+     },
+     totalPrice: {
+       type: Number,
+       required: true
+     }
+   },
+   { _id: false }
+);
 
 const UserMasterSchema = new Schema(
   {
@@ -45,7 +93,7 @@ const UserMasterSchema = new Schema(
     password: {
       type: String,
       required: [true, "Password is required"],
-      // Remember to hash the password before saving to the database
+      
     },
     phone: {
       type: String,
@@ -54,23 +102,27 @@ const UserMasterSchema = new Schema(
     email: {
       type: String,
       required: [true, "Email is required"],
-      unique: true, // Enforces unique emails
+      unique: true,
       match: [
         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
         "Please enter a valid email address",
       ],
     },
+    cart: {
+      type: [CartItemSchema],
+      default: []
+    },
     addresses: {
       type: [AddressSchema],
-      default: [], // By default, users will have an empty array of addresses
+      default: [], 
     },
     isActive: {
       type: Boolean,
-      default: true, // Defaults to active
+      default: true, 
     },
   },
   {
-    timestamps: true, // Automatically manages createdAt and updatedAt fields
+    timestamps: true, 
   }
 );
 

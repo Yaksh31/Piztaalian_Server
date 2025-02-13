@@ -7,23 +7,23 @@ const mongoose = require("mongoose");
 
 exports.getBranchesWithZeroMenuItems = async (req, res) => {
   try {
-    // Fetch all branches from BranchMaster
+   
     const allBranches = await BranchMaster.find({}, { _id: 1, branchName: 1 });
 
-    // Fetch all branches that have at least one menu item
+   
     const branchesWithMenus = await MenuMaster.find({}, { branchName: 1 });
 
-    // Convert to a Set for efficient lookup
+    
     const menuBranchSet = new Set(
       branchesWithMenus.map((menu) => String(menu.branchName))
     );
 
-    // Filter branches that DO NOT exist in MenuMaster
+    
     const branchesWithoutMenus = allBranches.filter(
       (branch) => !menuBranchSet.has(String(branch._id))
     );
 
-    res.status(200).json(branchesWithoutMenus);
+    res.status(200).json(branchesWithoutMenus)
   } catch (error) {
     console.error("Error fetching branches without menu items:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -32,9 +32,9 @@ exports.getBranchesWithZeroMenuItems = async (req, res) => {
 
 exports.updateMenuMaster = async (req, res) => {
   try {
-    const { branchName, menuItem, isActive } = req.body; // Extract branchName and menuItem
+    const { branchName, menuItem, isActive } = req.body; 
 
-    // **Parse `menuItem` as JSON string**
+    
     let parsedMenuItem = [];
     if (typeof menuItem === "string") {
       try {
@@ -45,35 +45,34 @@ exports.updateMenuMaster = async (req, res) => {
     } else if (Array.isArray(menuItem)) {
       parsedMenuItem = menuItem;
     } else {
-      // If menuItem is neither string nor array, return an error
+     
       return res.status(400).json({ message: "menuItem must be an array." });
     }
 
     const additionalLinkFiles = {};
 
-    // Process uploaded files (binary data)
+    
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
         if (file.fieldname.startsWith("menuItem")) {
           const indexMatch = file.fieldname.match(/\d+/);
-          const index = indexMatch ? parseInt(indexMatch[0], 10) : null; // Extract index safely
+          const index = indexMatch ? parseInt(indexMatch[0], 10) : null; 
           if (index !== null && !isNaN(index)) {
-            additionalLinkFiles[index] = `uploads/FoodImages/${file.filename}`; // Store the file path
+            additionalLinkFiles[index] = `uploads/FoodImages/${file.filename}`; 
           }
         }
       });
     }
 
-    // **Use the parsed `menuItem` array for processing**
+   
     const updatedMenuItems = parsedMenuItem.map((item, index) => ({
       ...item,
-      foodImage: additionalLinkFiles[index] || item.foodImage, // Use binary file path if provided; otherwise, retain the existing value
+      foodImage: additionalLinkFiles[index] || item.foodImage, 
     }));
 
-    // Check if MenuMaster exists for the branch
     let menuMaster = await MenuMaster.findOne({ branchName }).exec();
     if (!menuMaster) {
-      // Create new MenuMaster if not found
+    
       menuMaster = new MenuMaster({
         branchName,
         menuItem: updatedMenuItems,
@@ -88,7 +87,7 @@ exports.updateMenuMaster = async (req, res) => {
         data: menuMaster,
       });
     } else {
-      // Update existing MenuMaster
+      
       menuMaster.menuItem = updatedMenuItems;
       menuMaster.isActive = isActive;
       await menuMaster.save();
@@ -107,6 +106,87 @@ exports.updateMenuMaster = async (req, res) => {
     });
   }
 };
+
+exports.updateMenuMasterByAdmin = async (req, res) => {
+  try {
+    const { branchName } = req.body;
+    let menuItem = JSON.parse(req.body.menuItem);
+
+    const additionalLinkFiles = {};
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        if (file.fieldname.startsWith("menuItem")) {
+          const indexMatch = file.fieldname.match(/\d+/);
+          if (indexMatch) {
+            const index = parseInt(indexMatch[0], 10);
+            additionalLinkFiles[index] = `uploads/FoodImages/${file.filename}`;
+          }
+        }
+      });
+    }
+
+    menuItem = menuItem.map((rawItem, index) => {
+      const spiceNum = rawItem.spiceLevel === "" ? null : Number(rawItem.spiceLevel) || null;
+
+      const cleanedToppings = (rawItem.toppings || []).map((group) => ({
+        toppingCategory: typeof group.toppingCategory === "object"
+          ? group.toppingCategory._id  // if it's { _id: "...", name: "..."}
+          : group.toppingCategory,     // otherwise, assume it's already a string
+        toppings: (group.toppings || []).map((tId) =>
+          typeof tId === "object" ? tId._id : tId
+        )
+      }));
+
+      const cleanedVariants = (rawItem.variants || []).map((v) => ({
+        variantName: String(v.variantName || ""),
+        price: Number(v.price || 0),
+      }));
+
+      const updatedItem = {
+        categoryName: String(rawItem.categoryName),    // must be an _id string
+        itemName: String(rawItem.itemName),
+        price: Number(rawItem.price || 0),
+        spiceLevel: spiceNum,
+        isJain: Boolean(rawItem.isJain),
+        checkedPrice: Number(rawItem.checkedPrice || 0),
+        description: String(rawItem.description),
+        foodImage: rawItem.foodImage || "",
+        isActive: rawItem.isActive !== false, // default true
+        variants: cleanedVariants,
+        toppings: cleanedToppings,
+      };
+
+      // If there's a newly uploaded file, override the path
+      if (additionalLinkFiles[index]) {
+        updatedItem.foodImage = additionalLinkFiles[index];
+      }
+
+      return updatedItem;
+    });
+
+    const menuMaster = await MenuMaster.findOneAndUpdate(
+      { branchName },
+      { branchName, menuItem },
+      { new: true, upsert: true }
+    );
+
+    return res.status(200).json({
+      isOk: true,
+      message: menuMaster.isNew ? "MenuMaster created successfully" : "MenuMaster updated successfully",
+      data: menuMaster,
+    });
+  } catch (error) {
+    console.error("Error in upsert operation for MenuMaster:", error);
+    return res.status(500).json({
+      message: "An error occurred during the upsert operation",
+      error: error.message
+    });
+  }
+};
+
+
+ 
+
 
 // exports.updateMenuMaster = async (req, res) => {
 //     try {
@@ -176,19 +256,30 @@ exports.updateMenuMaster = async (req, res) => {
 
 exports.getMenuItemsByBranchId = async (req, res) => {
   try {
-    const { branchId } = req.params; // Extract branchId from request params
+    const { branchId } = req.params; 
 
-    // Check if branchId is valid
+   
     if (!mongoose.Types.ObjectId.isValid(branchId)) {
       return res.status(400).json({
         message: "Invalid branch ID provided.",
       });
     }
 
+
+
     // Find the MenuMaster document for the given branchId
     const menuMaster = await MenuMaster.findOne({
-      branchName: branchId,
-    }).exec();
+      branchName: branchId,})
+      // .populate("menuItem.categoryName") 
+      .populate({
+        path: "menuItem.toppings.toppingCategory", // Populates topping category details
+        model: "ToppingCategory",
+      })
+      .populate({
+        path: "menuItem.toppings.toppings", // Populates individual topping details
+        model: "ToppingMaster",
+      })
+      .exec();
 
     if (!menuMaster) {
       return res.status(404).json({
@@ -221,6 +312,50 @@ exports.listMenuByParams = async (req, res) => {
       {
         $match: { isActive: isActive },
       },
+      // {
+      //   $unwind: {
+      //     path: "$menuItem",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
+      // // Unwind the toppings array inside each menu item so that each topping becomes a separate document in the pipeline
+      // {
+      //   $unwind: {
+      //     path: "$menuItem.toppings",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
+
+      
+      // {
+      //   $lookup: {
+      //     from: "toppingcategories",
+      //     localField: "menuItem.toppings.toppingCategory",
+      //     foreignField: "_id",
+      //     as: "toppingCategoryDetails",
+      //   },
+      // },
+      // {
+      //   $unwind: {
+      //     path: "$menuItem.toppings.toppingCategoryDetails",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
+      // // Lookup topping master details
+      // {
+      //   $lookup: {
+      //     from: "toppingmasters", // collection name for topping masters
+      //     localField: "menuItem.toppings.toppings",
+      //     foreignField: "_id",
+      //     as: "menuItem.toppings.toppingMastersData",
+      //   },
+      // },
+      // {
+      //   $unwind: {
+      //     path: "$menuItem.toppings.toppingMastersData",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
       {
         $lookup: {
           from: "branches", // Ensure the collection name is correct
@@ -336,5 +471,49 @@ exports.listMenuByParams = async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).send(error);
+  }
+};
+
+
+exports.getMenuById = async (req, res) => {
+  try {
+    const { id } = req.params; 
+
+   
+     
+
+    // Find the MenuMaster document for the given branchId
+    const menuMaster = await MenuMaster.findById(id)
+      .populate("branchName") 
+      .populate({
+        path: "menuItem.toppings.toppingCategory", // Populates topping category details
+        model: "ToppingCategory",
+      })
+      .populate({
+        path: "menuItem.toppings.toppings", // Populates individual topping details
+        model: "ToppingMaster",
+      })
+      .exec();
+
+    if (!menuMaster) {
+      return res.status(404).json({
+        message: "Menu items not found for the given branch ID",
+      });
+    }
+
+    // Convert binary images to Base64
+    const menuItemsWithImages = menuMaster.menuItem.map((item) => ({
+      ...item.toObject(),
+    }));
+
+    return res.status(200).json({
+      data: { ...menuMaster.toObject(), menuItem: menuItemsWithImages },
+    });
+  } catch (error) {
+    console.error("Error fetching menu items:", error);
+    res.status(500).json({
+      message: "An error occurred while fetching menu items",
+      error: error.message,
+    });
   }
 };
