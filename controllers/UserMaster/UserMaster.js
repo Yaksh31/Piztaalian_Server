@@ -1,9 +1,7 @@
-// 1. Import required modules
-const UserMaster = require("../../models/UserMaster/UserMaster");
 const User = require("../../models/UserMaster/UserMaster");
 const bcrypt = require("bcrypt");
 
-// 2. GET a single user
+
 exports.getUserMaster = async (req, res) => {
   try {
     const user = await User.findById(req.params._id).exec();
@@ -16,10 +14,10 @@ exports.getUserMaster = async (req, res) => {
   }
 };
 
-// 3. CREATE a new user
+
 exports.createUserMaster = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, isActive, addresses } =
+    const { firstName, lastName, email, password, phone, isActive, addresses , cart } =
       req.body;
     console.log(">>>>>", req.body);
 
@@ -30,26 +28,26 @@ exports.createUserMaster = async (req, res) => {
     }
 
     // Address validation
-    if (!addresses || addresses.length === 0) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "At least one address is required" });
-    }
+    // if (!addresses || addresses.length === 0) {
+    //   return res
+    //     .status(400)
+    //     .json({ isOk: false, message: "At least one address is required" });
+    // }
 
-    const address = addresses[0];
-    console.log(address);
-    if (
-      !address.addressTitle ||
-      !address.address ||
-      !address.area ||
-      !address.city ||
-      !address.state ||
-      !address.country
-    ) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "All address fields are required" });
-    }
+    // const address = addresses[0];
+    // console.log(address);
+    // if (
+    //   !address.addressTitle ||
+    //   !address.address ||
+    //   !address.area ||
+    //   !address.city ||
+    //   !address.state ||
+    //   !address.country
+    // ) {
+    //   return res
+    //     .status(400)
+    //     .json({ isOk: false, message: "All address fields are required" });
+    // }
 
     const emailExists = await User.findOne({ email }).exec();
     if (emailExists) {
@@ -60,12 +58,12 @@ exports.createUserMaster = async (req, res) => {
 
     // Ensure that at least one address is marked as default.
     // If none is marked as default, mark the first one as default.
-    const defaultFound = addresses.some(
-      (addr) => addr.isDefault === true || addr.isDefault === "true"
-    );
-    if (!defaultFound) {
-      addresses[0].isDefault = true;
-    }
+    // const defaultFound = addresses.some(
+    //   (addr) => addr.isDefault === true || addr.isDefault === "true"
+    // );
+    // if (!defaultFound) {
+    //   addresses[0].isDefault = true;
+    // }
 
     const newUser = new User({
       firstName,
@@ -75,6 +73,7 @@ exports.createUserMaster = async (req, res) => {
       phone,
       isActive,
       addresses: addresses || [],
+      cart: cart || []
     });
 
     const savedUser = await newUser.save();
@@ -89,7 +88,6 @@ exports.createUserMaster = async (req, res) => {
   }
 };
 
-// 4. LIST all users
 exports.listUserMaster = async (req, res) => {
   try {
     const users = await User.find()
@@ -102,7 +100,7 @@ exports.listUserMaster = async (req, res) => {
   }
 };
 
-// 5. LIST users by parameters (search/sort/pagination)
+
 exports.listUserMasterByParams = async (req, res) => {
   try {
     let { skip, per_page, sorton, sortdir, match, isActive } = req.body;
@@ -203,13 +201,13 @@ exports.listUserMasterByParams = async (req, res) => {
               phone: { $regex: match, $options: "i" },
             },
             //  { password: { $regex: match, $options: "i" } }, // commented out as before
-            { "addresses.addressTitle": { $regex: match, $options: "i" } },
-            { "addresses.address": { $regex: match, $options: "i" } },
-            // UPDATED: Search using lookup fields instead of raw ObjectIds
-            { "cityData.CityName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "stateData.StateName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "countryData.CountryName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "addresses.area": { $regex: match, $options: "i" } },
+            // { "addresses.addressTitle": { $regex: match, $options: "i" } },
+            // { "addresses.address": { $regex: match, $options: "i" } },
+            // // UPDATED: Search using lookup fields instead of raw ObjectIds
+            // { "cityData.CityName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "stateData.StateName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "countryData.CountryName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "addresses.area": { $regex: match, $options: "i" } },
           ],
         },
       };
@@ -245,7 +243,7 @@ exports.listUserMasterByParams = async (req, res) => {
   }
 };
 
-// 6. UPDATE a user
+
 exports.updateUserMaster = async (req, res) => {
   try {
     // const updatedData = req.body;
@@ -279,7 +277,6 @@ exports.updateUserMaster = async (req, res) => {
   }
 };
 
-// 7. REMOVE (delete) a user
 exports.removeUserMaster = async (req, res) => {
   try {
     const removedUser = await User.findByIdAndDelete(req.params._id);
@@ -292,7 +289,7 @@ exports.removeUserMaster = async (req, res) => {
   }
 };
 
-// 8. LOGIN for UserMaster
+
 exports.userLoginMaster = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -319,5 +316,219 @@ exports.userLoginMaster = async (req, res) => {
     res
       .status(500)
       .json({ isOk: false, message: "An error occurred while logging in" });
+  }
+};
+
+
+exports.getCart = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId).select("cart").exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({ isOk: true, data: user.cart });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.addCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const cartItem = req.body; 
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $push: { cart: cartItem } },
+      { new: true }
+    ).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.status(201).json({
+      isOk: true,
+      data: user.cart,
+      message: "Cart item added successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.updateCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const index = parseInt(req.params.index, 10);
+    const updateData = req.body;
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    if (!user.cart || index < 0 || index >= user.cart.length) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Invalid cart item index" });
+    }
+    // Merge new fields into the existing cart item
+    user.cart[index] = { ...user.cart[index].toObject(), ...updateData };
+    await user.save();
+    res.json({
+      isOk: true,
+      data: user.cart,
+      message: "Cart item updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.removeCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const index = parseInt(req.params.index, 10);
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    if (!user.cart || index < 0 || index >= user.cart.length) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Invalid cart item index" });
+    }
+    user.cart.splice(index, 1);
+    await user.save();
+    res.json({
+      isOk: true,
+      data: user.cart,
+      message: "Cart item removed successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.clearCart = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { cart: [] } },
+      { new: true }
+    ).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({
+      isOk: true,
+      data: user.cart,
+      message: "Cart cleared successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.getAddresses = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId).select("addresses").exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({ isOk: true, data: user.addresses });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.getAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const user = await User.findById(userId).select("addresses").exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res.status(404).json({ isOk: false, message: "Address not found" });
+    }
+    res.json({ isOk: true, data: address });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.addAddress = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const newAddress = req.body; // Expect a valid address object per AddressSchema
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    user.addresses.push(newAddress);
+    await user.save();
+    res.status(201).json({
+      isOk: true,
+      data: user.addresses,
+      message: "Address added successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.updateAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const updateData = req.body;
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res.status(404).json({ isOk: false, message: "Address not found" });
+    }
+    // Merge updateData into the existing address subdocument
+    Object.keys(updateData).forEach((key) => {
+      address[key] = updateData[key];
+    });
+    await user.save();
+    res.json({
+      isOk: true,
+      data: address,
+      message: "Address updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.removeAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res.status(404).json({ isOk: false, message: "Address not found" });
+    }
+    address.remove(); // Remove the subdocument from the array
+    await user.save();
+    res.json({
+      isOk: true,
+      data: user.addresses,
+      message: "Address removed successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
   }
 };

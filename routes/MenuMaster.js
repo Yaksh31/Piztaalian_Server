@@ -8,6 +8,8 @@ const {
   getMenuItemsByBranchId,
   updateMenuMaster,
   listMenuByParams,
+  getMenuById,
+  updateMenuMasterByAdmin
 } = require("../controllers/MenuMaster/MenuMaster");
 
 // Route for creating or updating MenuMaster
@@ -32,6 +34,8 @@ router.post("/auth/menu/listByParams", listMenuByParams);
 
 // Define route to fetch all menu items
 router.get("/auth/get/branchForMenu", getBranchesWithZeroMenuItems);
+router.get("/auth/get/menuItems/:id", getMenuById);
+router.put("/auth/update/menu/:id", upload.any(), updateMenuMasterByAdmin);
 
 
 module.exports = router;
