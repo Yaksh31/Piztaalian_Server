@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const User = require("../../../models/Auth/User/AdminUsers");
 const fs = require("fs");
 
@@ -123,7 +124,7 @@ exports.listAdminUserByParams = async (req, res) => {
         },
       ].concat(query);
     }
-
+  
     if (sorton && sortdir) {
       let sort = {};
       sort[sorton] = sortdir == "desc" ? -1 : 1;
