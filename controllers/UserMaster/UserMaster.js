@@ -152,6 +152,23 @@ exports.listUserMasterByParams = async (req, res) => {
           path: "$cityData",
           preserveNullAndEmptyArrays: true,
         },
+        
+      },
+      {
+        $group: {
+          _id: "$_id",
+          firstName: { $first: "$firstName" },
+          lastName: { $first: "$lastName" },
+          email: { $first: "$email" },
+          phone: { $first: "$phone" },
+          isActive: { $first: "$isActive" },
+          addresses: { $first: "$addresses" },
+          countryData: { $first: "$countryData" },
+          stateData: { $first: "$stateData" },
+          cityData: { $first: "$cityData" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+        },
       },
 
       {
