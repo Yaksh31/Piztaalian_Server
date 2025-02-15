@@ -1,42 +1,43 @@
 const mongoose = require("mongoose");
 const { Schema, model } = mongoose;
 
+// Reuse the CartItem schema structure for order items
 const CartItemSchema = new Schema(
   {
     menuItem: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "MenuMaster",
       required: true,
-      default: null
+      default: null,
     },
     quantity: {
       type: Number,
       required: true,
-      default: 1
+      default: 1,
     },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branches",
       required: true,
-      default: null
+      default: null,
     },
     toppings: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "ToppingMaster",
         required: true,
-        default: null
-      }
+        default: null,
+      },
     ],
     variant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Variant",
-      default: null
+      default: null,
     },
     totalPrice: {
       type: Number,
-      required: true
-    }
+      required: true,
+    },
   },
   { _id: false }
 );
@@ -45,7 +46,12 @@ const OrderSchema = new Schema(
   {
     cart: {
       type: [CartItemSchema],
-      required: true
+      default: [],
+    },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branches",
+      required: true,
     },
     orderStatus: {
       type: String,
@@ -56,24 +62,33 @@ const OrderSchema = new Schema(
         "ready to pickup",
         "completed",
         "cancelled by customer",
-        "cancelled by outlet"
+        "cancelled by outlet",
       ],
-      default: "pending"
+      default: "pending",
+      required: true,
     },
     discountPrice: {
       type: Number,
-      default: 0
+      default: 0,
     },
     couponCode: {
-      type: String
+      type: String,
     },
     grandTotal: {
       type: Number,
-      required: true
+      required: true,
     },
-    completionTime: {
-      type: Date
-    }
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UserMaster",
+      required: true,
+    },
+    completionDateTime: {
+      type: Date,
+    },
+    remark: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

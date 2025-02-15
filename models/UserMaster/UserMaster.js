@@ -34,6 +34,7 @@ const AddressSchema = new Schema(
       ref: "City",
       required: [true, "City is required"],
     },
+ 
     state: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "State",
