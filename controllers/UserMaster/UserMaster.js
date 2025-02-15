@@ -1,6 +1,7 @@
 const User = require("../../models/UserMaster/UserMaster");
 const bcrypt = require("bcrypt");
 
+const nodemailer = require("nodemailer");
 
 exports.getUserMaster = async (req, res) => {
   try {
@@ -14,11 +15,18 @@ exports.getUserMaster = async (req, res) => {
   }
 };
 
-
 exports.createUserMaster = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, isActive, addresses , cart } =
-      req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
+      isActive,
+      addresses,
+      cart,
+    } = req.body;
     console.log(">>>>>", req.body);
 
     if (!firstName || !lastName || !email || !password) {
@@ -73,7 +81,7 @@ exports.createUserMaster = async (req, res) => {
       phone,
       isActive,
       addresses: addresses || [],
-      cart: cart || []
+      cart: cart || [],
     });
 
     const savedUser = await newUser.save();
@@ -99,7 +107,6 @@ exports.listUserMaster = async (req, res) => {
     return res.status(500).json({ isOk: false, message: error.message });
   }
 };
-
 
 exports.listUserMasterByParams = async (req, res) => {
   try {
@@ -153,6 +160,22 @@ exports.listUserMasterByParams = async (req, res) => {
           preserveNullAndEmptyArrays: true,
         },
         
+      },
+      {
+        $group: {
+          _id: "$_id",
+          firstName: { $first: "$firstName" },
+          lastName: { $first: "$lastName" },
+          email: { $first: "$email" },
+          phone: { $first: "$phone" },
+          isActive: { $first: "$isActive" },
+          addresses: { $first: "$addresses" },
+          countryData: { $first: "$countryData" },
+          stateData: { $first: "$stateData" },
+          cityData: { $first: "$cityData" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+        },
       },
       {
         $group: {
@@ -260,7 +283,6 @@ exports.listUserMasterByParams = async (req, res) => {
   }
 };
 
-
 exports.updateUserMaster = async (req, res) => {
   try {
     // const updatedData = req.body;
@@ -306,7 +328,6 @@ exports.removeUserMaster = async (req, res) => {
   }
 };
 
-
 exports.userLoginMaster = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -336,7 +357,6 @@ exports.userLoginMaster = async (req, res) => {
   }
 };
 
-
 exports.getCart = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -353,7 +373,7 @@ exports.getCart = async (req, res) => {
 exports.addCartItem = async (req, res) => {
   try {
     const userId = req.params.userId;
-    const cartItem = req.body; 
+    const cartItem = req.body;
     const user = await User.findByIdAndUpdate(
       userId,
       { $push: { cart: cartItem } },
@@ -399,7 +419,6 @@ exports.updateCartItem = async (req, res) => {
   }
 };
 
-
 exports.removeCartItem = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -425,7 +444,6 @@ exports.removeCartItem = async (req, res) => {
   }
 };
 
-
 exports.clearCart = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -446,7 +464,6 @@ exports.clearCart = async (req, res) => {
     res.status(500).json({ isOk: false, message: error.message });
   }
 };
-
 
 exports.getAddresses = async (req, res) => {
   try {
@@ -470,7 +487,9 @@ exports.getAddress = async (req, res) => {
     }
     const address = user.addresses.id(addressId);
     if (!address) {
-      return res.status(404).json({ isOk: false, message: "Address not found" });
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
     }
     res.json({ isOk: true, data: address });
   } catch (error) {
@@ -498,7 +517,6 @@ exports.addAddress = async (req, res) => {
   }
 };
 
-
 exports.updateAddress = async (req, res) => {
   try {
     const { userId, addressId } = req.params;
@@ -509,7 +527,9 @@ exports.updateAddress = async (req, res) => {
     }
     const address = user.addresses.id(addressId);
     if (!address) {
-      return res.status(404).json({ isOk: false, message: "Address not found" });
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
     }
     // Merge updateData into the existing address subdocument
     Object.keys(updateData).forEach((key) => {
@@ -526,7 +546,6 @@ exports.updateAddress = async (req, res) => {
   }
 };
 
-
 exports.removeAddress = async (req, res) => {
   try {
     const { userId, addressId } = req.params;
@@ -534,11 +553,27 @@ exports.removeAddress = async (req, res) => {
     if (!user) {
       return res.status(404).json({ isOk: false, message: "User not found" });
     }
+    // const address = user.addresses.id(addressId);
+    // if (!address) {
+    //   return res
+    //     .status(404)
+    //     .json({ isOk: false, message: "Address not found" });
+    // }
+    // address.remove(); // Remove the subdocument from the array
+
+    // Updated filter-based approach in the same structure:
     const address = user.addresses.id(addressId);
     if (!address) {
-      return res.status(404).json({ isOk: false, message: "Address not found" });
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
     }
-    address.remove(); // Remove the subdocument from the array
+
+    // Instead of `address.remove()`, we manually filter the array:
+    user.addresses = user.addresses.filter(
+      (addr) => String(addr._id) !== addressId
+    );
+
     await user.save();
     res.json({
       isOk: true,
@@ -547,5 +582,104 @@ exports.removeAddress = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+exports.sendEmailOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res
+        .status(201)
+        .json({ isOk: false, message: "Email is required" });
+    }
+
+    // 1) Check if user exists
+    let user = await User.findOne({ email }).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+
+    // 2) Generate a 6-digit OTP (customize as you like)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 3) Set expiration time for, say, 5 minutes from now
+    const expires = new Date(Date.now() + 2 * 60 * 1000);
+
+    // 4) Save OTP and expiration to user record
+    user.otp = otp;
+    user.otpExpiresAt = expires;
+    await user.save();
+
+    // 5) Send email with nodemailer
+    const mailOptions = {
+      from: "process.env.EMAIL_USER", // match transporter user
+      to: user.email,
+      subject: "Your OTP Code",
+      text: `Your login OTP is ${otp}. It will expire in 2 minutes.`,
+    };
+    await transporter.sendMail(mailOptions);
+
+    // 6) Return success
+    return res.json({
+      isOk: true,
+      message: `OTP has been sent to ${user.email}.`,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.verifyEmailOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res
+        .status(201)
+        .json({ isOk: false, message: "Email and OTP are required" });
+    }
+
+    // 1) Check if user exists
+    let user = await User.findOne({ email }).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+
+    // 2) Verify OTP matches and is not expired
+    if (user.otp !== otp) {
+      return res.status(401).json({ isOk: false, message: "Invalid OTP" });
+    }
+    if (!user.otpExpiresAt || user.otpExpiresAt < Date.now()) {
+      return res.status(401).json({
+        isOk: false,
+        message: "OTP has expired, please request a new one",
+      });
+    }
+
+    // 3) Clear the OTP from DB (so it can’t be reused)
+    user.otp = null;
+    user.otpExpiresAt = null;
+    await user.save();
+
+    // 4) Here you can choose to create a session token, JWT, etc.
+    // For now, just return success plus user data (without password & OTP fields).
+    const { password, otp: unused, otpExpiresAt, ...rest } = user.toObject();
+    return res.json({
+      isOk: true,
+      message: "OTP verified successfully",
+      data: rest, // user fields except password/otp
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
   }
 };

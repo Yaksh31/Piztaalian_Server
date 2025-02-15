@@ -18,7 +18,10 @@ const {
   getAddress,
   addAddress,
   updateAddress,
-  removeAddress
+  removeAddress,
+
+  sendEmailOTP,
+  verifyEmailOTP
 } = require("../controllers/UserMaster/UserMaster");
 
 router.post("/auth/create/user", catchAsync(createUserMaster));
@@ -40,5 +43,9 @@ router.get("/auth/addresses/:userId/:addressId", catchAsync(getAddress));
 router.post("/auth/addresses/:userId/add", catchAsync(addAddress));
 router.put("/auth/addresses/:userId/update/:addressId", catchAsync(updateAddress));
 router.delete("/auth/addresses/:userId/remove/:addressId", catchAsync(removeAddress));
+
+
+router.post("/auth/sendEmailOTP", catchAsync(sendEmailOTP)); // Send OTP to email
+router.post("/auth/verifyEmailOTP", catchAsync(verifyEmailOTP)); // Verify OTP for login
 
 module.exports = router;

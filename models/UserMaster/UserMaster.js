@@ -1,88 +1,92 @@
 const mongoose = require("mongoose");
 const { Schema, model } = mongoose;
 
-const AddressSchema = new Schema({
-  addressType: {
-    type: String,
-    enum: ["home", "office", "other"],
-    required: [true, "Address type is required"],
+const AddressSchema = new Schema(
+  {
+    addressType: {
+      type: String,
+      enum: ["home", "office", "other"],
+      required: [true, "Address type is required"],
+    },
+    buildingNumber: {
+      type: String,
+      required: [true, "House/Flat/Block number is required"],
+    },
+    landmark: {
+      type: String,
+      default: "",
+    },
+    phoneNumber: {
+      type: String,
+      required: [true, "Phone number is required"],
+    },
+    emailAddress: {
+      type: String,
+      required: [true, "Email address is required"],
+      match: [/\S+@\S+\.\S+/, "Please use a valid email address"],
+    },
+    area: {
+      type: String,
+      required: [true, "Area is required"],
+    },
+    city: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "City",
+      required: [true, "City is required"],
+    },
+ 
+    state: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "State",
+      required: [true, "State is required"],
+    },
+    country: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      required: [true, "Country is required"],
+    },
   },
-  buildingNumber: {
-    type: String,
-    required: [true, "House/Flat/Block number is required"],
-  },
-  landmark: {
-    type: String,
-    default: "",
-  },
-  phoneNumber: {
-    type: String,
-    required: [true, "Phone number is required"],
-  },
-  emailAddress: {
-    type: String,
-    required: [true, "Email address is required"],
-    match: [/\S+@\S+\.\S+/, "Please use a valid email address"],
-  },
-  area: {
-    type: String,
-    required: [true, "Area is required"],
-  },
-  city: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "City",
-    required: [true, "City is required"],
-  },
-  state: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "State",
-    required: [true, "State is required"],
-  },
-  country: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Country",
-    required: [true, "Country is required"],
-  },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 const CartItemSchema = new Schema(
- {
-     menuItem: {
-       type: mongoose.Schema.Types.ObjectId,
-       ref: "MenuMaster",
-       required: true,
-       default: null
-     },
-     quantity: {
-       type: Number,
-       required: true,
-       default: 1
-     },
-     branch: {
-       type: mongoose.Schema.Types.ObjectId,
-       ref: "Branches",
-       required: true,
-       default: null
-     },
-     toppings: [
-       {
-         type: mongoose.Schema.Types.ObjectId,
-         ref: "ToppingMaster",
-         required: true,
-         default: null
-       }
-     ],
-     variant: {
-       type: mongoose.Schema.Types.ObjectId,
-       ref: "Variant",
-       default: null
-     },
-     totalPrice: {
-       type: Number,
-       required: true
-     }
-   },
-   { _id: false }
+  {
+    menuItem: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MenuMaster",
+      required: true,
+      default: null,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      default: 1,
+    },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branches",
+      required: true,
+      default: null,
+    },
+    toppings: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ToppingMaster",
+        required: true,
+        default: null,
+      },
+    ],
+    variant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Variant",
+      default: null,
+    },
+    totalPrice: {
+      type: Number,
+      required: true,
+    },
+  },
+  { _id: false }
 );
 
 const UserMasterSchema = new Schema(
@@ -98,7 +102,6 @@ const UserMasterSchema = new Schema(
     password: {
       type: String,
       required: [true, "Password is required"],
-      
     },
     phone: {
       type: String,
@@ -115,20 +118,40 @@ const UserMasterSchema = new Schema(
     },
     cart: {
       type: [CartItemSchema],
-      default: []
+      default: [],
     },
     addresses: {
       type: [AddressSchema],
-      default: [], 
+      default: [],
     },
     isActive: {
       type: Boolean,
-      default: true, 
+      default: true,
+    },
+    otp: {
+      type: String,
+      default: null,
+    },
+    otpExpiresAt: {
+      type: Date,
+      default: null,
     },
   },
   {
-    timestamps: true, 
+    timestamps: true,
   }
 );
+
+UserMasterSchema.pre("save", function (next) {
+  // If `otp` was modified and not empty, set expiry to 5 min from now
+  if (this.isModified("otp") && this.otp) {
+    this.otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+  }
+  // If `otp` was modified and now empty (null or ""), clear the expiry
+  else if (this.isModified("otp") && !this.otp) {
+    this.otpExpiresAt = null;
+  }
+  next();
+});
 
 module.exports = model("UserMaster", UserMasterSchema);
