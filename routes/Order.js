@@ -10,7 +10,8 @@ const {
   updateOrder,
   removeOrder,
   listOrdersByBranch,
-  updateOrderStatus
+  updateOrderStatus,
+  listUserOrders
 } = require("../controllers/Order/Order");
 
 router.post("/auth/order/create", catchAsync(createOrder));
@@ -21,5 +22,7 @@ router.put("/auth/order/update/:id", catchAsync(updateOrder));
 router.delete("/auth/order/remove/:id", catchAsync(removeOrder));
 router.post("/auth/order/listByBranch", catchAsync(listOrdersByBranch));
 router.patch("/auth/order/:id", catchAsync(updateOrderStatus));
+
+router.get("/auth/order/user/:userId", catchAsync(listUserOrders));
 
 module.exports = router;

@@ -1,16 +1,25 @@
 const mongoose = require("mongoose");
 const { Schema, model, Types } = require("mongoose");
-const BannerImagesSchema = new mongoose.Schema(
+const ComplainSchema = new mongoose.Schema(
   {
-    Title: {
+    name: {
       type: String,
       required: true,
     },
-    keyWord: {
+    email: {
+      type: String,
+      required: true,
+      match: [/\S+@\S+\.\S+/, "Please use a valid email address"],
+    },
+    number: {
       type: String,
       required: true,
     },
-    Description: {
+    orderId: {
+      type: String,
+      required: true,
+    },
+    message: {
       type: String,
       // required: true,
     },
@@ -19,10 +28,11 @@ const BannerImagesSchema = new mongoose.Schema(
      // required: true,
     },
     IsActive: {
+      default: true,
       type: Boolean,
     },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("BannerImages", BannerImagesSchema);
+module.exports = mongoose.model("Complain", ComplainSchema);
