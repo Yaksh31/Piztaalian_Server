@@ -19,7 +19,7 @@ const {
   addAddress,
   updateAddress,
   removeAddress,
-
+  getGrandTotal,
   sendEmailOTP,
   verifyEmailOTP
 } = require("../controllers/UserMaster/UserMaster");
@@ -47,5 +47,7 @@ router.delete("/auth/addresses/:userId/remove/:addressId", catchAsync(removeAddr
 
 router.post("/auth/sendEmailOTP", catchAsync(sendEmailOTP)); // Send OTP to email
 router.post("/auth/verifyEmailOTP", catchAsync(verifyEmailOTP)); // Verify OTP for login
+
+router.get("/auth/cart/grandtotal/:userId", catchAsync(getGrandTotal));
 
 module.exports = router;

@@ -1,13 +1,224 @@
 const Order = require("../../models/Order/Order");
 const mongoose = require("mongoose");
+const eventEmitter = require("../../eventEmitter");
+const ToppingMaster = require("../../models/Topping/ToppingMaster");
+const CouponAssign = require("../../models/CouponMaster/CouponAssign");
+const MenuMaster = require("../../models/MenuMaster/MenuMaster");
+
+// exports.getOrder = async (req, res) => {
+//   try {
+//     const order = await Order.findById(req.params.id).exec();
+//     if (!order) {
+//       return res.status(404).json({ isOk: false, message: "Order not found" });
+//     }
+//     res.json({ isOk: true, data: order });
+//   } catch (error) {
+//     res.status(500).json({ isOk: false, message: error.message });
+//   }
+// };
 
 exports.getOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).exec();
-    if (!order) {
+    const orderId = req.params.id; // CHANGE: Using order id from params instead of user id
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Order ID is required" });
+    }
+
+    const pipeline = [
+      // MATCH stage: Filter by the provided order ID
+      { $match: { _id: new mongoose.Types.ObjectId(orderId) } },
+
+      // LOOKUP: Get user details from "usermasters"
+      {
+        $lookup: {
+          from: "usermasters",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "branches", // Ensure this matches your branch collection name
+          localField: "branch",
+          foreignField: "_id",
+          as: "branchDetails",
+        },
+      },
+      { $unwind: { path: "$branchDetails", preserveNullAndEmptyArrays: true } },
+
+      // UNWIND the cart array to process each cart item
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+
+      // ADD FIELDS: Convert cart.menuItem (string) to ObjectId
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+        },
+      },
+
+      // ADD FIELDS: Convert each cart.topping to ObjectId
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" },
+            },
+          },
+        },
+      },
+
+      // LOOKUP: Fetch menu item details from "menumasters"
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
+            {
+              $project: {
+                _id: 0,
+                itemName: "$menuItem.itemName",
+                description: "$menuItem.description",
+              },
+            },
+          ],
+          as: "cart.menuItemDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // LOOKUP: Fetch variant details from "menumasters"
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            {
+              $match: {
+                $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price",
+              },
+            },
+          ],
+          as: "cart.variantDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // LOOKUP: Fetch topping details from "toppingmasters"
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails",
+        },
+      },
+
+      // GROUP: Reassemble the cart array for the order
+      {
+        $group: {
+          _id: "$_id",
+          orderStatus: { $first: "$orderStatus" },
+          couponCode: { $first: "$couponCode" },
+          discountPrice: { $first: "$discountPrice" },
+          subTotal: { $first: "$subTotal" },
+          effectiveSubtotal: { $first: "$effectiveSubtotal" },
+          cgst: { $first: "$cgst" },
+          sgst: { $first: "$sgst" },
+          totalTax: { $first: "$totalTax" },
+          grandTotal: { $first: "$grandTotal" },
+          completionDateTime: { $first: "$completionDateTime" },
+          remark: { $first: "$remark" },
+          createdAt: { $first: "$createdAt" },
+          userDetails: { $first: "$userDetails" },
+          branchDetails: { $first: "$branchDetails" },
+          cart: { $push: "$cart" },
+        },
+      },
+
+      // PROJECT: Transform the cart items to include populated details
+      {
+        $project: {
+          orderStatus: 1,
+          couponCode: 1,
+          discountPrice: 1,
+          subTotal: 1,
+          effectiveSubtotal: 1,
+          cgst: 1,
+          sgst: 1,
+          totalTax: 1,
+          grandTotal: 1,
+          completionDateTime: 1,
+          remark: 1,
+          createdAt: 1,
+          userDetails: 1,
+          branch: { //  Project branch name and address from branchDetails
+            name: "$branchDetails.branchName",
+            address: "$branchDetails.address",
+          },
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                totalPrice: "$$item.totalPrice",
+                // CHANGE: Using the populated menuItem name field
+                menuItem: "$$item.menuItemDetails.itemName",
+                description: "$$item.menuItemDetails.description",
+                variant: {
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice",
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    const orderResult = await Order.aggregate(pipeline);
+    if (!orderResult || orderResult.length === 0) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
-    res.json({ isOk: true, data: order });
+    res.json({ isOk: true, data: orderResult[0] });
   } catch (error) {
     res.status(500).json({ isOk: false, message: error.message });
   }
@@ -18,43 +229,162 @@ exports.createOrder = async (req, res) => {
     const {
       cart,
       orderStatus,
-      discountPrice,
       couponCode,
-      grandTotal,
       userId,
-      completionDateTime,
       remark,
       branch,
+      // grandTotal and discountPrice will be recalculated, so we ignore provided values,
     } = req.body;
 
-    // Basic validation for required fields
-    if (!grandTotal || !userId) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "Grand total and userId are required" });
+    // Ensure essential fields are provided
+    if (!userId || !cart || cart.length === 0 || !branch) {
+      return res.status(400).json({
+        isOk: false,
+        message:
+          "User ID, branch, and at least one cart item are required for order processing",
+      });
     }
 
+    // Calculate subtotal for internal tracking and validate pricing details
+    let subtotal = 0;
+    const updatedCart = await Promise.all(
+      cart.map(async (item) => {
+        // Propagate branch from Order-level if missing in the cart item
+        const cartBranch = item.branch || branch;
+
+        // Retrieve menu item details from MenuMaster for base pricing
+        const menuMasterDoc = await MenuMaster.findOne(
+          { "menuItem._id": item.menuItem },
+          { "menuItem.$": 1 }
+        );
+
+        let basePrice = 0;
+        let menuItemName = "";
+        let variantPrice = 0;
+        let variantName = "";
+
+        if (
+          menuMasterDoc &&
+          menuMasterDoc.menuItem &&
+          menuMasterDoc.menuItem.length > 0
+        ) {
+          const menuItemDetail = menuMasterDoc.menuItem[0];
+          menuItemName = menuItemDetail.itemName;
+          basePrice = menuItemDetail.price || 0;
+
+          // If a variant is provided, determine the appropriate variant pricing
+          if (
+            item.variant &&
+            menuItemDetail.variants &&
+            menuItemDetail.variants.length > 0
+          ) {
+            const variantDetail = menuItemDetail.variants.find(
+              (v) => v._id.toString() === item.variant
+            );
+            if (variantDetail) {
+              variantName = variantDetail.variantName;
+              variantPrice = variantDetail.price || 0;
+            }
+          }
+        }
+
+        // Retrieve topping details and compute the total topping price
+        let toppingsTotal = 0;
+        let toppingsDetails = [];
+        if (item.toppings && item.toppings.length > 0) {
+          const toppingsDocs = await ToppingMaster.find({
+            _id: { $in: item.toppings },
+          });
+          if (toppingsDocs && toppingsDocs.length > 0) {
+            toppingsDocs.forEach((t) => {
+              toppingsTotal += t.price || 0;
+              toppingsDetails.push({
+                toppingName: t.toppingName,
+                toppingPrice: t.price || 0,
+              });
+            });
+          }
+        }
+
+        // Determine price per unit: if variant exists, use variantPrice; otherwise, use basePrice.
+        const pricePerItem = item.variant ? variantPrice : basePrice;
+        const itemPrice = (pricePerItem + toppingsTotal) * (item.quantity || 1);
+        subtotal += itemPrice;
+
+        return {
+          ...item,
+          branch: cartBranch,
+          menuItemName,
+          basePrice,
+          variantName,
+          variantPrice,
+          toppingsDetails,
+          totalPrice: itemPrice,
+        };
+      })
+    );
+
+    // --- Coupon Discount Calculation ---
+    let discount = 0;
+    if (couponCode && couponCode.trim() !== "") {
+      const couponAssign = await CouponAssign.findOne({
+        uniqueCouponCode: couponCode.trim(),
+      }).populate("coupon");
+
+      if (couponAssign && couponAssign.isActive && couponAssign.coupon) {
+        const discountPercentage =
+          Number(couponAssign.coupon.discountPercentage) || 0;
+        const maxDiscount = Number(couponAssign.coupon.maxDiscount) || Infinity;
+        discount = Math.min(subtotal * (discountPercentage / 100), maxDiscount);
+      }
+    }
+    // ----------------------------------------------------------------
+
+    // Calculate effective subtotal and tax details
+    const effectiveSubtotal = subtotal - discount;
+    const cgst = effectiveSubtotal * 0.05;
+    const sgst = effectiveSubtotal * 0.05;
+    const totalTax = cgst + sgst;
+    const computedGrandTotal = effectiveSubtotal + totalTax;
+
+    // Create new Order document with calculated financial details persisted in the database.
     const newOrder = new Order({
-      cart: cart || [],
-      orderStatus: orderStatus || "pending",
-      discountPrice: discountPrice || 0,
-      couponCode: couponCode || "",
-      grandTotal,
-      userId,
-      completionDateTime,
-      remark,
+      cart: updatedCart,
       branch,
+      orderStatus: orderStatus || "pending",
+      couponCode: couponCode || "",
+      discountPrice: discount,
+      subTotal: subtotal,
+      effectiveSubtotal, // new field (requires Order schema update)
+      cgst, // new field (requires Order schema update)
+      sgst, // new field (requires Order schema update)
+      totalTax, // new field (requires Order schema update)
+      grandTotal: computedGrandTotal,
+      userId,
+      remark,
     });
 
     const savedOrder = await newOrder.save();
-    res.status(201).json({
+
+    // Emit events to trigger downstream processes as part of the event-driven architecture.
+    eventEmitter.emit("newOrder", savedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
+
+    return res.status(201).json({
       isOk: true,
       data: savedOrder,
-      message: "Order created successfully",
+      message: "Order created successfully.",
+      subtotal,
+      discount,
+      effectiveSubtotal,
+      cgst,
+      sgst,
+      totalTax,
+      grandTotal: computedGrandTotal,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ isOk: false, message: err.message });
+    console.error("Error during order creation: ", err);
+    return res.status(500).json({ isOk: false, message: err.message });
   }
 };
 
@@ -147,6 +477,7 @@ exports.listOrderByParams = async (req, res) => {
     let { skip, per_page, sorton, sortdir, match, orderStatus, branchId } =
       req.body;
     let query = [];
+
     if (branchId) {
       query.push({
         $match: { branch: new mongoose.Types.ObjectId(branchId) },
@@ -250,12 +581,18 @@ exports.listOrderByParams = async (req, res) => {
         as: "cart.toppingDetails",
       },
     });
+    // Group stage: Include the additional fields from the Order document.
     query.push({
       $group: {
         _id: "$_id",
         orderStatus: { $first: "$orderStatus" },
         couponCode: { $first: "$couponCode" },
         discountPrice: { $first: "$discountPrice" },
+        subTotal: { $first: "$subTotal" }, // Existing subTotal field
+        effectiveSubtotal: { $first: "$effectiveSubtotal" }, // Newly added field
+        cgst: { $first: "$cgst" }, // Newly added field
+        sgst: { $first: "$sgst" }, // Newly added field
+        totalTax: { $first: "$totalTax" }, // Newly added field
         grandTotal: { $first: "$grandTotal" },
         completionDateTime: { $first: "$completionDateTime" },
         remark: { $first: "$remark" },
@@ -264,11 +601,17 @@ exports.listOrderByParams = async (req, res) => {
         cart: { $push: "$cart" },
       },
     });
+    // Projection stage: Expose the new fields in the final output.
     query.push({
       $project: {
         orderStatus: 1,
         couponCode: 1,
         discountPrice: 1,
+        subTotal: 1,
+        effectiveSubtotal: 1,
+        cgst: 1,
+        sgst: 1,
+        totalTax: 1,
         grandTotal: 1,
         completionDateTime: 1,
         remark: 1,
@@ -318,6 +661,7 @@ exports.listOrderByParams = async (req, res) => {
       { $unwind: "$stage1" },
       { $project: { count: "$stage1.count", data: "$stage2" } },
     ]);
+
     const list = await Order.aggregate(query);
     res.json(list);
   } catch (error) {
@@ -336,6 +680,8 @@ exports.updateOrder = async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
+    eventEmitter.emit("orderUpdated", updatedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
     res.json({
       isOk: true,
       data: updatedOrder,
@@ -352,6 +698,8 @@ exports.removeOrder = async (req, res) => {
     if (!removedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
+    eventEmitter.emit("orderDeleted", removedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
     res.json({ isOk: true, message: "Order deleted successfully" });
   } catch (err) {
     res.status(500).json({ isOk: false, message: err.message });
@@ -438,6 +786,8 @@ exports.updateOrderStatus = async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
+    eventEmitter.emit("orderStatusUpdated", updatedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
     res.json({
       isOk: true,
       data: updatedOrder,
@@ -449,9 +799,31 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+// exports.listUserOrders = async (req, res) => {
+//   try {
+//     // Assume the user ID is passed as a route parameter
+//     const userId = req.params.userId;
+//     if (!userId) {
+//       return res
+//         .status(400)
+//         .json({ isOk: false, message: "User ID is required" });
+//     }
+
+//     // Find orders where the userId matches the provided ID, sorted by creation date descending
+//     const userOrders = await Order.find({
+//       userId: new mongoose.Types.ObjectId(userId),
+//     })
+//       .sort({ createdAt: -1 })
+//       .exec();
+
+//     res.json({ isOk: true, data: userOrders });
+//   } catch (error) {
+//     res.status(500).json({ isOk: false, message: error.message });
+//   }
+// };
+
 exports.listUserOrders = async (req, res) => {
   try {
-    // Assume the user ID is passed as a route parameter
     const userId = req.params.userId;
     if (!userId) {
       return res
@@ -459,15 +831,182 @@ exports.listUserOrders = async (req, res) => {
         .json({ isOk: false, message: "User ID is required" });
     }
 
-    // Find orders where the userId matches the provided ID, sorted by creation date descending
-    const userOrders = await Order.find({
-      userId: new mongoose.Types.ObjectId(userId),
-    })
-      .sort({ createdAt: -1 })
-      .exec();
+    const pipeline = [
+      // Match orders by the given userId
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
 
-    res.json({ isOk: true, data: userOrders });
+      // Lookup user details from "usermasters"
+      {
+        $lookup: {
+          from: "usermasters",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+
+      // Unwind the cart array to work on each cart item separately
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+
+      // Convert the cart.menuItem string to ObjectId
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+        },
+      },
+      // Convert each topping ID in the cart.toppings array to ObjectId
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" },
+            },
+          },
+        },
+      },
+
+      // Lookup the menu item details from "menumasters"
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            {
+              $match: {
+                $expr: { $eq: ["$menuItem._id", "$$menuId"] },
+              },
+            },
+            { $project: { _id: 0, itemName: "$menuItem.itemName" } },
+          ],
+          as: "cart.menuItemDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Lookup the variant details from "menumasters"
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            {
+              $match: {
+                $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price",
+              },
+            },
+          ],
+          as: "cart.variantDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Lookup topping details from "toppingmasters"
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails",
+        },
+      },
+
+      // Group back the cart items for each order
+      {
+        $group: {
+          _id: "$_id",
+          orderStatus: { $first: "$orderStatus" },
+          couponCode: { $first: "$couponCode" },
+          discountPrice: { $first: "$discountPrice" },
+          subTotal: { $first: "$subTotal" },
+          effectiveSubtotal: { $first: "$effectiveSubtotal" },
+          cgst: { $first: "$cgst" },
+          sgst: { $first: "$sgst" },
+          totalTax: { $first: "$totalTax" },
+          grandTotal: { $first: "$grandTotal" },
+          completionDateTime: { $first: "$completionDateTime" },
+          remark: { $first: "$remark" },
+          createdAt: { $first: "$createdAt" },
+          userDetails: { $first: "$userDetails" },
+          cart: { $push: "$cart" },
+        },
+      },
+
+      // Project the desired fields and transform the cart array
+      {
+        $project: {
+          orderStatus: 1,
+          couponCode: 1,
+          discountPrice: 1,
+          subTotal: 1,
+          effectiveSubtotal: 1,
+          cgst: 1,
+          sgst: 1,
+          totalTax: 1,
+          grandTotal: 1,
+          completionDateTime: 1,
+          remark: 1,
+          createdAt: 1,
+          userDetails: 1,
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                totalPrice: "$$item.totalPrice",
+                // Extract the menu item name from the looked-up details
+                menuItem: "$$item.menuItemDetails.itemName",
+                variant: {
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice",
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      // Finally, sort the orders by creation date in descending order
+      { $sort: { createdAt: -1 } },
+    ];
+
+    const orders = await Order.aggregate(pipeline);
+    res.json({ isOk: true, data: orders });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
   }
 };

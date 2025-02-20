@@ -15,6 +15,28 @@ const XLSX = require("xlsx");
 const puppeteer = require("puppeteer");
 const __basedir = path.resolve();
 
+exports.getCouponAssignByCode = async (req, res) => {
+  try {
+    const couponCode = req.params.code;
+    if (!couponCode) {
+      return res.status(400).json({ message: "Coupon code is required." });
+    }
+    const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode })
+      .populate('influencer')
+      .populate('coupon')
+      .populate('branch')
+      .exec();
+    if (!couponAssign) {
+      return res.status(404).json({ message: "Coupon not found." });
+    }
+    res.status(200).json({ isOk: true, data: couponAssign });
+  } catch (err) {
+    console.error("Error in getCouponAssignByCode:", err);
+    res.status(500).json({ error: "Internal Server Error." });
+  }
+};
+
+
 
 
 
@@ -354,7 +376,7 @@ exports.removeCouponAssign = async (req, res) => {
 exports.redeemCoupon = async (req, res) => {
   try {
     const uniqueCouponCode = req.params._id;
-
+    console.log(req.params)
     if (!uniqueCouponCode) {
       return res.status(201).json({ message: "Unique coupon code is required." });
     }
@@ -365,7 +387,7 @@ exports.redeemCoupon = async (req, res) => {
       .populate('coupon')
       .populate('branch')
       .exec();
-
+    console.log(couponAssign)
     if (!couponAssign) {
       return res.status(201).json({ message: "Coupon not found." });
     }

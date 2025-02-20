@@ -4,14 +4,31 @@ const morgan = require("morgan");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const fs = require("fs");
+const socketio = require('socket.io');
+const http = require('http');
 const path = require("path");
 const { throws } = require("assert");
 require("dotenv").config();
 const axios = require("axios");
+const eventEmitter = require('./eventEmitter');
+
 
 global.__basedir = __dirname;
 
 const app = express();
+const server = http.createServer(app);
+const io = socketio(server, {
+  cors: {
+    origin: "*", // Allow all origins (update for production)
+    methods: ["GET", "POST"]
+  }
+});
+
+eventEmitter.on('newOrder', (order) => {
+  io.emit('orderCreated', order);
+});
+
+
 let databasestatus = "In-Progress";
 app.use(cors());
 app.use((req, res, next) => {
