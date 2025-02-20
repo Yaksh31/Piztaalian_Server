@@ -1,5 +1,10 @@
 const User = require("../../models/UserMaster/UserMaster");
 const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
+const MenuMaster = require("../../models/MenuMaster/MenuMaster");
+const ToppingMaster = require("../../models/Topping/ToppingMaster");
+const CouponAssign = require("../../models/CouponMaster/CouponAssign")
+
 
 const nodemailer = require("nodemailer");
 
@@ -360,32 +365,190 @@ exports.userLoginMaster = async (req, res) => {
 exports.getCart = async (req, res) => {
   try {
     const userId = req.params.userId;
-    const user = await User.findById(userId).select("cart").exec();
-    if (!user) {
-      return res.status(404).json({ isOk: false, message: "User not found" });
+
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+        },
+      },
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
+            { $project: { _id: "$menuItem._id", itemName: "$menuItem.itemName" } },
+          ],
+          as: "cart.menuItemDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            { $match: { $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] } } },
+            {
+              $project: {
+                _id:"$menuItem.variants._id",
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price",
+              },
+            },
+          ],
+          as: "cart.variantDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails",
+        },
+      },
+      // New lookup to join branch details from the Branches collection.
+      {
+        $lookup: {
+          from: "branches",
+          localField: "cart.branch", // assuming the cart has a "branch" field
+          foreignField: "_id",
+          as: "cart.branchDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.branchDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          cart: { $push: "$cart" },
+        },
+      },
+      {
+        $project: {
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                totalPrice: "$$item.totalPrice",
+                menuItem: "$$item.menuItemDetails.itemName",
+                menuItem_id: "$$item.menuItemDetails._id",
+                variant: {
+                  _id: "$$item.variantDetails._id",
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice",
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppind_id: "$$t._id",
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price",
+                    },
+                  },
+                },
+                // Add the branch details
+                branch: {
+                  _id: "$$item.branchDetails._id",
+                  branchName: "$$item.branchDetails.branchName",
+                  address: "$$item.branchDetails.address",
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    const [result] = await User.aggregate(pipeline);
+    if (!result) {
+      return res.json({ isOk: true, data: [], subtotal: 0 });
     }
-    res.json({ isOk: true, data: user.cart });
+
+    const updatedCart = result.cart;
+    const subtotal = updatedCart.reduce((acc, item) => {
+      return acc + (item.totalPrice || 0);
+    }, 0);
+
+    return res.json({ isOk: true, data: updatedCart, subtotal });
   } catch (error) {
-    res.status(500).json({ isOk: false, message: error.message });
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
   }
 };
+
+
 
 exports.addCartItem = async (req, res) => {
   try {
     const userId = req.params.userId;
-    const cartItem = req.body;
+    let cartItem = req.body;
+    const menuDoc = await MenuMaster.findOne({ "menuItem._id": cartItem.menuItem });
+    if (!menuDoc) return res.status(404).json({ isOk: false, message: "Menu item not found" });
+    const menuItem = menuDoc.menuItem.find(mi => mi._id.toString() === cartItem.menuItem);
+    let basePrice = menuItem.price;
+    if (cartItem.variant) {
+      const variant = menuItem.variants.find(v => v._id.toString() === cartItem.variant);
+      if (variant) {
+        basePrice = variant.price;
+      }
+    }
+    let toppingTotal = 0;
+    if (Array.isArray(cartItem.toppings) && cartItem.toppings.length > 0) {
+      const toppingDocs = await ToppingMaster.find({ _id: { $in: cartItem.toppings } });
+      toppingTotal = toppingDocs.reduce((acc, t) => acc + t.price, 0);
+    }
+    const totalPrice = (basePrice + toppingTotal) * cartItem.quantity;
+    cartItem.totalPrice = totalPrice;
     const user = await User.findByIdAndUpdate(
       userId,
       { $push: { cart: cartItem } },
       { new: true }
     ).exec();
-    if (!user) {
-      return res.status(404).json({ isOk: false, message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ isOk: false, message: "User not found" });
+    const subtotal = user.cart.reduce((acc, item) => acc + item.totalPrice, 0);
     res.status(201).json({
       isOk: true,
       data: user.cart,
-      message: "Cart item added successfully",
+      subtotal,
+      message: "Cart item added successfully"
     });
   } catch (error) {
     res.status(500).json({ isOk: false, message: error.message });
@@ -398,26 +561,45 @@ exports.updateCartItem = async (req, res) => {
     const index = parseInt(req.params.index, 10);
     const updateData = req.body;
     const user = await User.findById(userId).exec();
-    if (!user) {
-      return res.status(404).json({ isOk: false, message: "User not found" });
-    }
-    if (!user.cart || index < 0 || index >= user.cart.length) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "Invalid cart item index" });
-    }
-    // Merge new fields into the existing cart item
+    if (!user) return res.status(404).json({ isOk: false, message: "User not found" });
+    if (!user.cart || index < 0 || index >= user.cart.length)
+      return res.status(400).json({ isOk: false, message: "Invalid cart item index" });
+
     user.cart[index] = { ...user.cart[index].toObject(), ...updateData };
+    const cartItem = user.cart[index];
+
+    const menuDoc = await MenuMaster.findOne({ "menuItem._id": cartItem.menuItem });
+    if (!menuDoc) return res.status(404).json({ isOk: false, message: "Menu item not found" });
+    const menuItem = menuDoc.menuItem.find(mi => mi._id.toString() === cartItem.menuItem.toString());
+    
+    let basePrice = menuItem.price;
+    if (cartItem.variant) {
+      const variant = menuItem.variants.find(v => v._id.toString() === cartItem.variant.toString());
+      if (variant) basePrice = variant.price;
+    }
+    
+    let toppingTotal = 0;
+    if (Array.isArray(cartItem.toppings) && cartItem.toppings.length > 0) {
+      const toppingDocs = await ToppingMaster.find({ _id: { $in: cartItem.toppings } });
+      toppingTotal = toppingDocs.reduce((acc, t) => acc + t.price, 0);
+    }
+    
+    const totalPrice = (basePrice + toppingTotal) * cartItem.quantity;
+    user.cart[index].totalPrice = totalPrice;
+
     await user.save();
+    const subtotal = user.cart.reduce((acc, item) => acc + item.totalPrice, 0);
     res.json({
       isOk: true,
       data: user.cart,
+      subtotal,
       message: "Cart item updated successfully",
     });
   } catch (error) {
     res.status(500).json({ isOk: false, message: error.message });
   }
 };
+
 
 exports.removeCartItem = async (req, res) => {
   try {
@@ -434,10 +616,15 @@ exports.removeCartItem = async (req, res) => {
     }
     user.cart.splice(index, 1);
     await user.save();
+    const subtotal = user.cart.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
     res.json({
       isOk: true,
       data: user.cart,
       message: "Cart item removed successfully",
+      subtotal
     });
   } catch (error) {
     res.status(500).json({ isOk: false, message: error.message });
@@ -458,6 +645,7 @@ exports.clearCart = async (req, res) => {
     res.json({
       isOk: true,
       data: user.cart,
+      subtotal:0,
       message: "Cart cleared successfully",
     });
   } catch (error) {
@@ -677,6 +865,179 @@ exports.verifyEmailOTP = async (req, res) => {
       isOk: true,
       message: "OTP verified successfully",
       data: rest, // user fields except password/otp
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+
+exports.getGrandTotal = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    const couponCode = req.query.couponCode ? req.query.couponCode.trim() : null;
+
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" }
+        }
+      },
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" }
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
+            { $project: { _id: 0, itemName: "$menuItem.itemName", price: "$menuItem.price" } }
+          ],
+          as: "cart.menuItemDetails"
+        }
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            { $match: { $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] } } },
+            {
+              $project: {
+                _id: 0,
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price"
+              }
+            }
+          ],
+          as: "cart.variantDetails"
+        }
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails"
+        }
+      },
+      {
+        $group: {
+          _id: "$_id",
+          cart: { $push: "$cart" }
+        }
+      },
+      {
+        $project: {
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                // Use totalPrice if it exists; otherwise, fallback to (price * quantity)
+                totalPrice: {
+                  $ifNull: [
+                    "$$item.totalPrice",
+                    { $multiply: ["$$item.quantity", { $ifNull: ["$$item.menuItemDetails.price", 0] }] }
+                  ]
+                },
+                menuItem: "$$item.menuItemDetails.itemName",
+                variant: {
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice"
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ];
+
+    const [result] = await User.aggregate(pipeline);
+    if (!result) {
+      return res.json({
+        isOk: true,
+        data: [],
+        subtotal: 0,
+        discount: 0,
+        effectiveSubtotal: 0,
+        cgst: 0,
+        sgst: 0,
+        grandTotal: 0
+      });
+    }
+
+    const updatedCart = result.cart;
+    let subtotal = updatedCart.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
+
+    // --- Coupon discount calculation ---
+    let discount = 0;
+    if (couponCode) {
+      const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode })
+        .populate('coupon')
+        .exec();
+      if (couponAssign && couponAssign.isActive && couponAssign.coupon) {
+        const discountPercentage = Number(couponAssign.coupon.discountPercentage) || 0;
+        const maxDiscount = Number(couponAssign.coupon.maxDiscount) || Infinity;
+        discount = Math.min(subtotal * (discountPercentage / 100), maxDiscount);
+      }
+    }
+    // ----------------------------------------------------------------
+
+    const effectiveSubtotal = subtotal - discount;
+    const cgst = effectiveSubtotal * 0.05;
+    const sgst = effectiveSubtotal * 0.05;
+    const grandTotal = effectiveSubtotal + cgst + sgst;
+
+    return res.json({
+      isOk: true,
+      data: updatedCart,
+      subtotal,
+      discount,
+      effectiveSubtotal,
+      cgst,
+      sgst,
+      grandTotal
     });
   } catch (error) {
     console.error(error);
