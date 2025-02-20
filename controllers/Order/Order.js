@@ -1,5 +1,9 @@
 const Order = require("../../models/Order/Order");
 const mongoose = require("mongoose");
+const eventEmitter = require('../../eventEmitter');
+const ToppingMaster = require("../../models/Topping/ToppingMaster");
+const CouponAssign = require("../../models/CouponMaster/CouponAssign");
+const MenuMaster = require("../../models/MenuMaster/MenuMaster");
 
 exports.getOrder = async (req, res) => {
   try {
@@ -19,43 +23,165 @@ exports.createOrder = async (req, res) => {
     const {
       cart,
       orderStatus,
-      discountPrice,
       couponCode,
-      grandTotal,
       userId,
-      completionDateTime,
-      remark,
-      branch
-    } = req.body;
-
-    // Basic validation for required fields
-    if (!grandTotal || !userId) {
-      return res.status(400).json({ isOk: false, message: "Grand total and userId are required" });
-    }
-
-    const newOrder = new Order({
-      cart: cart || [],
-      orderStatus: orderStatus || "pending",
-      discountPrice: discountPrice || 0,
-      couponCode: couponCode || "",
-      grandTotal,
-      userId,
-      completionDateTime,
       remark,
       branch,
+      // grandTotal and discountPrice will be recalculated, so we ignore provided values
+    } = req.body;
+
+    // Ensure essential fields are provided
+    if (!userId || !cart || cart.length === 0 || !branch) {
+      return res.status(400).json({
+        isOk: false,
+        message:
+          "User ID, branch, and at least one cart item are required for order processing",
+      });
+    }
+
+    // Calculate subtotal for internal tracking and validate pricing details
+    let subtotal = 0;
+    const updatedCart = await Promise.all(
+      cart.map(async (item) => {
+        // Propagate branch from Order-level if missing in the cart item
+        const cartBranch = item.branch || branch;
+
+        // Retrieve menu item details from MenuMaster for base pricing
+        const menuMasterDoc = await MenuMaster.findOne(
+          { "menuItem._id": item.menuItem },
+          { "menuItem.$": 1 }
+        );
+
+        let basePrice = 0;
+        let menuItemName = "";
+        let variantPrice = 0;
+        let variantName = "";
+
+        if (
+          menuMasterDoc &&
+          menuMasterDoc.menuItem &&
+          menuMasterDoc.menuItem.length > 0
+        ) {
+          const menuItemDetail = menuMasterDoc.menuItem[0];
+          menuItemName = menuItemDetail.itemName;
+          basePrice = menuItemDetail.price || 0;
+
+          // If a variant is provided, determine the appropriate variant pricing
+          if (
+            item.variant &&
+            menuItemDetail.variants &&
+            menuItemDetail.variants.length > 0
+          ) {
+            const variantDetail = menuItemDetail.variants.find(
+              (v) => v._id.toString() === item.variant
+            );
+            if (variantDetail) {
+              variantName = variantDetail.variantName;
+              variantPrice = variantDetail.price || 0;
+            }
+          }
+        }
+
+        // Retrieve topping details and compute the total topping price
+        let toppingsTotal = 0;
+        let toppingsDetails = [];
+        if (item.toppings && item.toppings.length > 0) {
+          const toppingsDocs = await ToppingMaster.find({
+            _id: { $in: item.toppings },
+          });
+          if (toppingsDocs && toppingsDocs.length > 0) {
+            toppingsDocs.forEach((t) => {
+              toppingsTotal += t.price || 0;
+              toppingsDetails.push({
+                toppingName: t.toppingName,
+                toppingPrice: t.price || 0,
+              });
+            });
+          }
+        }
+
+        // Determine price per unit: if variant exists, use variantPrice; otherwise, use basePrice.
+        const pricePerItem = item.variant ? variantPrice : basePrice;
+        const itemPrice = (pricePerItem + toppingsTotal) * (item.quantity || 1);
+        subtotal += itemPrice;
+
+        return {
+          ...item,
+          branch: cartBranch,
+          menuItemName,
+          basePrice,
+          variantName,
+          variantPrice,
+          toppingsDetails,
+          totalPrice: itemPrice,
+        };
+      })
+    );
+
+    // --- Coupon Discount Calculation ---
+    let discount = 0;
+    if (couponCode && couponCode.trim() !== "") {
+      const couponAssign = await CouponAssign.findOne({
+        uniqueCouponCode: couponCode.trim(),
+      }).populate("coupon");
+
+      if (couponAssign && couponAssign.isActive && couponAssign.coupon) {
+        const discountPercentage = Number(couponAssign.coupon.discountPercentage) || 0;
+        const maxDiscount = Number(couponAssign.coupon.maxDiscount) || Infinity;
+        discount = Math.min(subtotal * (discountPercentage / 100), maxDiscount);
+      }
+    }
+    // ----------------------------------------------------------------
+
+    // Calculate effective subtotal and tax details
+    const effectiveSubtotal = subtotal - discount;
+    const cgst = effectiveSubtotal * 0.05;
+    const sgst = effectiveSubtotal * 0.05;
+    const totalTax = cgst + sgst;
+    const computedGrandTotal = effectiveSubtotal + totalTax;
+
+    // Create new Order document with calculated financial details persisted in the database.
+    const newOrder = new Order({
+      cart: updatedCart,
+      branch,
+      orderStatus: orderStatus || "pending",
+      couponCode: couponCode || "",
+      discountPrice: discount,
+      subTotal: subtotal,
+      effectiveSubtotal, // new field (requires Order schema update)
+      cgst,              // new field (requires Order schema update)
+      sgst,              // new field (requires Order schema update)
+      totalTax,          // new field (requires Order schema update)
+      grandTotal: computedGrandTotal,
+      userId,
+      remark,
     });
 
     const savedOrder = await newOrder.save();
-    res.status(201).json({
+
+    // Emit events to trigger downstream processes as part of the event-driven architecture.
+    eventEmitter.emit("newOrder", savedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
+
+    return res.status(201).json({
       isOk: true,
       data: savedOrder,
-      message: "Order created successfully",
+      message: "Order created successfully.",
+      subtotal,
+      discount,
+      effectiveSubtotal,
+      cgst,
+      sgst,
+      totalTax,
+      grandTotal: computedGrandTotal,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ isOk: false, message: err.message });
+    console.error("Error during order creation: ", err);
+    return res.status(500).json({ isOk: false, message: err.message });
   }
 };
+
+
 
 exports.listOrders = async (req, res) => {
   try {
@@ -145,8 +271,17 @@ exports.listOrders = async (req, res) => {
 
   exports.listOrderByParams = async (req, res) => {
     try {
-      let { skip, per_page, sorton, sortdir, match, orderStatus, branchId } = req.body;
+      let {
+        skip,
+        per_page,
+        sorton,
+        sortdir,
+        match,
+        orderStatus,
+        branchId
+      } = req.body;
       let query = [];
+  
       if (branchId) {
         query.push({
           $match: { branch: new mongoose.Types.ObjectId(branchId) }
@@ -234,12 +369,18 @@ exports.listOrders = async (req, res) => {
           as: "cart.toppingDetails"
         }
       });
+      // Group stage: Include the additional fields from the Order document.
       query.push({
         $group: {
           _id: "$_id",
           orderStatus: { $first: "$orderStatus" },
           couponCode: { $first: "$couponCode" },
           discountPrice: { $first: "$discountPrice" },
+          subTotal: { $first: "$subTotal" }, // Existing subTotal field
+          effectiveSubtotal: { $first: "$effectiveSubtotal" }, // Newly added field
+          cgst: { $first: "$cgst" },                         // Newly added field
+          sgst: { $first: "$sgst" },                         // Newly added field
+          totalTax: { $first: "$totalTax" },                 // Newly added field
           grandTotal: { $first: "$grandTotal" },
           completionDateTime: { $first: "$completionDateTime" },
           remark: { $first: "$remark" },
@@ -248,11 +389,17 @@ exports.listOrders = async (req, res) => {
           cart: { $push: "$cart" }
         }
       });
+      // Projection stage: Expose the new fields in the final output.
       query.push({
         $project: {
           orderStatus: 1,
           couponCode: 1,
           discountPrice: 1,
+          subTotal: 1,
+          effectiveSubtotal: 1,
+          cgst: 1,
+          sgst: 1,
+          totalTax: 1,
           grandTotal: 1,
           completionDateTime: 1,
           remark: 1,
@@ -302,6 +449,7 @@ exports.listOrders = async (req, res) => {
         { $unwind: "$stage1" },
         { $project: { count: "$stage1.count", data: "$stage2" } }
       ]);
+  
       const list = await Order.aggregate(query);
       res.json(list);
     } catch (error) {
@@ -309,6 +457,10 @@ exports.listOrders = async (req, res) => {
       res.status(500).send(error);
     }
   };
+  
+  
+  
+  
   
   
   
@@ -326,6 +478,8 @@ exports.listOrders = async (req, res) => {
       if (!updatedOrder) {
         return res.status(404).json({ isOk: false, message: "Order not found" });
       }
+      eventEmitter.emit('orderUpdated', updatedOrder);
+      eventEmitter.emit('ordersUpdateTrigger');
       res.json({
         isOk: true,
         data: updatedOrder,
@@ -343,6 +497,8 @@ exports.listOrders = async (req, res) => {
       if (!removedOrder) {
         return res.status(404).json({ isOk: false, message: "Order not found" });
       }
+      eventEmitter.emit('orderDeleted', removedOrder);
+      eventEmitter.emit('ordersUpdateTrigger');
       res.json({ isOk: true, message: "Order deleted successfully" });
     } catch (err) {
       res.status(500).json({ isOk: false, message: err.message });
@@ -424,6 +580,8 @@ exports.listOrders = async (req, res) => {
       if (!updatedOrder) {
         return res.status(404).json({ isOk: false, message: "Order not found" });
       }
+      eventEmitter.emit('orderStatusUpdated', updatedOrder);
+      eventEmitter.emit('ordersUpdateTrigger');
       res.json({ isOk: true, data: updatedOrder, message: "Order status updated successfully" });
     } catch (error) {
       console.error(error);

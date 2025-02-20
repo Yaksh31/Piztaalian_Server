@@ -18,7 +18,7 @@ const CartItemSchema = new Schema(
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branches",
-      required: true,
+      // required: true,
       default: null,
     },
     toppings: [
@@ -36,7 +36,7 @@ const CartItemSchema = new Schema(
     },
     totalPrice: {
       type: Number,
-      required: true,
+      // required: true,
     },
   },
   { _id: false }
@@ -78,10 +78,25 @@ const OrderSchema = new Schema(
       type: Number,
       required: true,
     },
+    subTotal:{
+      type:Number,
+    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "UserMaster",
       required: true,
+    },
+    sgst:{
+      type:Number,
+    },
+    cgst:{
+      type:Number,
+    },
+    totalTax:{
+      type:Number,
+    },
+    effectiveSubtotal:{
+      type:Number,
     },
     completionDateTime: {
       type: Date,
