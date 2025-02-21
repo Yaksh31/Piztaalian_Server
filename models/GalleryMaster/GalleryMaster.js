@@ -1,28 +1,26 @@
 const mongoose = require("mongoose");
 const { Schema, model, Types } = require("mongoose");
-const BannerImagesSchema = new mongoose.Schema(
+const GallerySchema = new mongoose.Schema(
   {
-    Title: {
+    title: {
       type: String,
       required: true,
     },
-    keyWord: {
-      type: String,
-      required: true,
-    },
-    Description: {
+
+    description: {
       type: String,
       // required: true,
     },
     bannerImage: {
       type: String,
-     // required: true,
+      // required: true,
     },
     IsActive: {
+      default: true,
       type: Boolean,
     },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("BannerImages", BannerImagesSchema);
+module.exports = mongoose.model("Gallery", GallerySchema);

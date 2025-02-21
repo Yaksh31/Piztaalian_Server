@@ -1,11 +1,11 @@
-const BannerImages = require("../../models/CMS/BannerImages");
+const Complain = require("../../models/ComplainMaster/Complain");
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
 
-exports.listBannerImages = async (req, res) => {
+exports.listComplains = async (req, res) => {
   try {
-    const list = await BannerImages.find().sort({ createdAt: -1 }).exec();
+    const list = await Complain.find().sort({ createdAt: -1 }).exec();
     res.json(list);
   } catch (error) {
     console.log(error);
@@ -13,9 +13,9 @@ exports.listBannerImages = async (req, res) => {
   }
 };
 
-exports.createBannerImages = async (req, res) => {
+exports.createComplains = async (req, res) => {
   try {
-    const uploadDir = `${__basedir}/uploads/BannerImg`;
+    const uploadDir = `${__basedir}/uploads/ComplainImg`;
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -24,15 +24,18 @@ exports.createBannerImages = async (req, res) => {
       ? await compressImage(req.file, uploadDir)
       : null;
 
-    let { Title, keyWord, Description, IsActive } = req.body;
+    let { name, email, number, orderId, message, IsActive } = req.body;
 
-    const add = await new BannerImages({
-      Title,
-      keyWord,
-      Description,
+    const add = await new Complain({
+      name,
+      email,
+      number,
+      orderId,
+      message,
       bannerImage,
       IsActive,
     }).save();
+
     res.status(200).json({ isOk: true, data: add, message: "" });
   } catch (err) {
     console.log("error", err);
@@ -40,7 +43,7 @@ exports.createBannerImages = async (req, res) => {
   }
 };
 
-exports.listBannerImagesByParams = async (req, res) => {
+exports.listComplainsByParams = async (req, res) => {
   try {
     let { skip, per_page, sorton, sortdir, match, IsActive } = req.body;
 
@@ -53,14 +56,20 @@ exports.listBannerImagesByParams = async (req, res) => {
         $match: {
           $or: [
             {
-              Title: new RegExp(match, "i"),
+              name: new RegExp(match, "i"),
             },
             {
-              keyWord: new RegExp(match, "i"),
+              email: new RegExp(match, "i"),
+            },
+            {
+              number: new RegExp(match, "i"),
+            },
+            {
+              orderId: new RegExp(match, "i"),
             },
 
             {
-              Description: new RegExp(match, "i"),
+              message: new RegExp(match, "i"),
             },
           ],
         },
@@ -117,16 +126,16 @@ exports.listBannerImagesByParams = async (req, res) => {
       ].concat(query);
     }
 
-    const list = await BannerImages.aggregate(query);
+    const list = await Complain.aggregate(query);
     res.json(list);
   } catch (error) {
     res.status(400).send(error);
   }
 };
 
-exports.removeBannerImages = async (req, res) => {
+exports.removeComplains = async (req, res) => {
   try {
-    const del = await BannerImages.findOneAndRemove({
+    const del = await Complain.findOneAndRemove({
       _id: req.params._id,
     });
     res.json(del);
@@ -136,41 +145,46 @@ exports.removeBannerImages = async (req, res) => {
   }
 };
 
-exports.getBannerImages = async (req, res) => {
+exports.getComplains = async (req, res) => {
   try {
-    const state = await BannerImages.findOne({ _id: req.params._id }).exec();
+    const state = await Complain.findOne({ _id: req.params._id }).exec();
     res.json(state);
   } catch (error) {
     res.status(400).send(error);
   }
 };
 
-exports.updateBannerImages = async (req, res) => {
+exports.updateComplains = async (req, res) => {
   try {
-    const uploadDir = `${__basedir}/uploads/BannerImg`;
+    const uploadDir = `${__basedir}/uploads/ComplainImg`;
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
     let bannerImage = req.file
-      ?  await compressImage(req.file, uploadDir)
+      ? await compressImage(req.file, uploadDir)
       : null;
+
     let fieldvalues = { ...req.body };
     if (bannerImage != null) {
       fieldvalues.bannerImage = bannerImage;
     }
-    const update = await BannerImages.findOneAndUpdate(
+
+    const update = await Complain.findOneAndUpdate(
       { _id: req.params._id },
       fieldvalues,
-
       { new: true }
     );
-    res.json(update);
+
+    res.json({
+      isOk: true,
+      data: update,
+      message: "Record updated successfully",
+    });
   } catch (err) {
     res.status(500).send(err);
   }
 };
-
 
 async function compressImage(file, uploadDir) {
   const filePath = path.join(uploadDir, file.filename);
@@ -198,7 +212,7 @@ async function compressImage(file, uploadDir) {
     fs.unlinkSync(filePath);
     fs.renameSync(compressedPath, filePath);
 
-    return `uploads/BannerImg/${file.filename}`;
+    return `uploads/ComplainImg/${file.filename}`;
   } catch (error) {
     console.log("Error compressing image:", error);
     return null;
