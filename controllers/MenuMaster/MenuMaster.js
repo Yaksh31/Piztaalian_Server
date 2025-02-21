@@ -51,6 +51,7 @@ exports.updateMenuMaster = async (req, res) => {
 
     const additionalLinkFiles = {};
 
+    const uploadDir = `${__basedir}/uploads/FoodImages`;
     
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
@@ -58,7 +59,7 @@ exports.updateMenuMaster = async (req, res) => {
           const indexMatch = file.fieldname.match(/\d+/);
           const index = indexMatch ? parseInt(indexMatch[0], 10) : null; 
           if (index !== null && !isNaN(index)) {
-            additionalLinkFiles[index] = `uploads/FoodImages/${file.filename}`; 
+            additionalLinkFiles[index] = compressImage(`uploads/FoodImages/${file.filename}`, uploadDir); 
           }
         }
       });
@@ -517,3 +518,37 @@ exports.getMenuById = async (req, res) => {
     });
   }
 };
+
+
+async function compressImage(file, uploadDir) {
+  const filePath = path.join(uploadDir, file.filename);
+  const compressedPath = path.join(uploadDir, `compressed-${file.filename}`);
+
+  try {
+    let quality = 80;
+    let compressed = false;
+
+    do {
+      await sharp(file.path)
+        .jpeg({ quality }) // Adjust the quality to reduce the size
+        .toFile(compressedPath);
+
+      const { size } = fs.statSync(compressedPath);
+      if (size <= 100 * 1024 || quality <= 20) {
+        // Check if size is under 100 KB or quality is too low
+        compressed = true;
+      } else {
+        quality -= 10; // Reduce quality further if size is still too large
+      }
+    } while (!compressed);
+
+    // Replace the original image with the compressed one
+    fs.unlinkSync(filePath);
+    fs.renameSync(compressedPath, filePath);
+
+    return `uploads/FoodImages/${file.filename}`;
+  } catch (error) {
+    console.log("Error compressing image:", error);
+    return null;
+  }
+}
