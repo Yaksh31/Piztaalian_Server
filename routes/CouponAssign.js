@@ -15,7 +15,8 @@ const {
   sendCouponPDF,
   influencerDashboard,
   exportCouponRedeemDetails,
-  getCouponAssignByCode
+  getCouponAssignByCode,
+  applyCouponPending
 } = require("../controllers/CouponMaster/CouponAssign");
 
 // Define routes
@@ -51,6 +52,11 @@ router.get("/auth/influencer/dashboard/:_id", catchAsync(influencerDashboard));
 router.get("/auth/exportCouponRedeemDetails/:_id", catchAsync(exportCouponRedeemDetails));
 
 router.get("/auth/CouponAssign/getByCode/:code", catchAsync(getCouponAssignByCode));
+
+router.post(
+  "/auth/CouponAssign/apply/:uniqueCouponCode",
+  catchAsync(applyCouponPending)
+);
 
 
 

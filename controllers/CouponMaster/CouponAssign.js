@@ -437,6 +437,64 @@ exports.redeemCoupon = async (req, res) => {
 };
 
 
+
+
+exports.applyCouponPending = async (req, res) => {
+  try {
+    const { uniqueCouponCode } = req.params;
+    if (!uniqueCouponCode) {
+      return res.status(400).json({ message: "Coupon code is required." });
+    }
+    
+    const couponAssign = await CouponAssign.findOne({ uniqueCouponCode })
+      .populate("coupon")
+      .exec();
+      
+    if (!couponAssign) {
+      return res.status(404).json({ message: "Coupon not found." });
+    }
+    if (!couponAssign.isActive) {
+      return res.status(400).json({ message: "Coupon is inactive." });
+    }
+    const currentDate = new Date();
+    if (
+      couponAssign.coupon &&
+      couponAssign.coupon.expiryDate &&
+      currentDate > new Date(couponAssign.coupon.expiryDate)
+    ) {
+      return res.status(400).json({ message: "Coupon has expired." });
+    }
+    
+    const { branchId, redeemerName, redeemerPhone } = req.body;
+    if (!branchId) {
+      return res.status(400).json({ message: "Branch ID is required for redemption." });
+    }
+    
+    // Set pending redemption details without decrementing the count.
+    couponAssign.pendingRedemption = true;
+    couponAssign.pendingRedeemedHistory = {
+      branch: branchId,
+      redeemedAt: new Date(),
+      redeemerName,
+      redeemerPhone,
+    };
+    
+    await couponAssign.save();
+    return res.status(200).json({
+      isOk: true,
+      message: "Coupon applied successfully (pending order confirmation).",
+      data: couponAssign,
+    });
+  } catch (err) {
+    console.error("Error in applyCouponPending:", err);
+    return res.status(500).json({ error: "Internal Server Error." });
+  }
+};
+
+
+
+
+
 // controllers/CouponAssignController.js
 //   const PDFDocument = require('pdfkit');
 // const fs = require('fs');
