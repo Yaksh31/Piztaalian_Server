@@ -180,7 +180,8 @@ exports.getOrder = async (req, res) => {
           remark: 1,
           createdAt: 1,
           userDetails: 1,
-          branch: { //  Project branch name and address from branchDetails
+          branch: {
+            //  Project branch name and address from branchDetails
             name: "$branchDetails.branchName",
             address: "$branchDetails.address",
           },
@@ -240,7 +241,8 @@ exports.createOrder = async (req, res) => {
     if (!userId || !cart || cart.length === 0 || !branch) {
       return res.status(400).json({
         isOk: false,
-        message: "User ID, branch, and at least one cart item are required for order processing",
+        message:
+          "User ID, branch, and at least one cart item are required for order processing",
       });
     }
 
@@ -261,11 +263,19 @@ exports.createOrder = async (req, res) => {
         let variantPrice = 0;
         let variantName = "";
 
-        if (menuMasterDoc && menuMasterDoc.menuItem && menuMasterDoc.menuItem.length > 0) {
+        if (
+          menuMasterDoc &&
+          menuMasterDoc.menuItem &&
+          menuMasterDoc.menuItem.length > 0
+        ) {
           const menuItemDetail = menuMasterDoc.menuItem[0];
           menuItemName = menuItemDetail.itemName;
           basePrice = menuItemDetail.price || 0;
-          if (item.variant && menuItemDetail.variants && menuItemDetail.variants.length > 0) {
+          if (
+            item.variant &&
+            menuItemDetail.variants &&
+            menuItemDetail.variants.length > 0
+          ) {
             const variantDetail = menuItemDetail.variants.find(
               (v) => v._id.toString() === item.variant
             );
@@ -317,7 +327,8 @@ exports.createOrder = async (req, res) => {
         uniqueCouponCode: couponCode.trim(),
       }).populate("coupon");
       if (couponAssign && couponAssign.isActive && couponAssign.coupon) {
-        const discountPercentage = Number(couponAssign.coupon.discountPercentage) || 0;
+        const discountPercentage =
+          Number(couponAssign.coupon.discountPercentage) || 0;
         const maxDiscount = Number(couponAssign.coupon.maxDiscount) || Infinity;
         discount = Math.min(subtotal * (discountPercentage / 100), maxDiscount);
       }
@@ -351,17 +362,19 @@ exports.createOrder = async (req, res) => {
 
     // --- Finalize Coupon Redemption ---
     if (couponCode && couponCode.trim() !== "") {
-      const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode.trim() });
+      const couponAssign = await CouponAssign.findOne({
+        uniqueCouponCode: couponCode.trim(),
+      });
       // Finalize only if pending redemption details exist.
-      if (couponAssign ) {
+      if (couponAssign) {
         couponAssign.redeemedHistory.push({
           redeemerName: userDetail.firstName,
           redeemerPhone: userDetail.phone,
-          branch:branch
+          branch: branch,
         });
         couponAssign.numberOfCoupons -= 1;
         couponAssign.pendingRedemption = false;
-      
+
         await couponAssign.save();
       }
     }
@@ -388,8 +401,6 @@ exports.createOrder = async (req, res) => {
   }
 };
 
-
-
 exports.listOrders = async (req, res) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 }).exec();
@@ -403,7 +414,6 @@ exports.listOrders = async (req, res) => {
 //     let { skip, per_page, sorton, sortdir, match, orderStatus ,branchId} = req.body;
 
 //     let query = [
-
 
 //       // {
 //       //   $match: { orderStatus: orderStatus }
@@ -456,7 +466,6 @@ exports.listOrders = async (req, res) => {
 //     ].concat(query)
 //     }
 
-
 //     if (sorton && sortdir) {
 //       let sort = {};
 //       sort[sorton] = sortdir === "desc" ? -1 : 1;
@@ -478,20 +487,13 @@ exports.listOrders = async (req, res) => {
 
 exports.listOrderByParams = async (req, res) => {
   try {
-    let {
-      skip,
-      per_page,
-      sorton,
-      sortdir,
-      match,
-      orderStatus,
-      branchId
-    } = req.body;
+    let { skip, per_page, sorton, sortdir, match, orderStatus, branchId } =
+      req.body;
     let query = [];
 
     if (branchId) {
       query.push({
-        $match: { branch: new mongoose.Types.ObjectId(branchId) }
+        $match: { branch: new mongoose.Types.ObjectId(branchId) },
       });
     }
     if (match) {
@@ -499,9 +501,9 @@ exports.listOrderByParams = async (req, res) => {
         $match: {
           $or: [
             { couponCode: { $regex: match, $options: "i" } },
-            { orderStatus: { $regex: match, $options: "i" } }
-          ]
-        }
+            { orderStatus: { $regex: match, $options: "i" } },
+          ],
+        },
       });
     }
     if (orderStatus) {
@@ -512,19 +514,19 @@ exports.listOrderByParams = async (req, res) => {
         from: "usermasters",
         localField: "userId",
         foreignField: "_id",
-        as: "userDetails"
-      }
+        as: "userDetails",
+      },
     });
     query.push({
-      $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true }
+      $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true },
     });
     query.push({
-      $unwind: { path: "$cart", preserveNullAndEmptyArrays: true }
+      $unwind: { path: "$cart", preserveNullAndEmptyArrays: true },
     });
     query.push({
       $addFields: {
-        "cart.menuItem": { $toObjectId: "$cart.menuItem" }
-      }
+        "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+      },
     });
     query.push({
       $addFields: {
@@ -532,10 +534,10 @@ exports.listOrderByParams = async (req, res) => {
           $map: {
             input: "$cart.toppings",
             as: "t",
-            in: { $toObjectId: "$$t" }
-          }
-        }
-      }
+            in: { $toObjectId: "$$t" },
+          },
+        },
+      },
     });
     query.push({
       $lookup: {
@@ -544,13 +546,16 @@ exports.listOrderByParams = async (req, res) => {
         pipeline: [
           { $unwind: "$menuItem" },
           { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
-          { $project: { _id: 0, itemName: "$menuItem.itemName" } }
+          { $project: { _id: 0, itemName: "$menuItem.itemName" } },
         ],
-        as: "cart.menuItemDetails"
-      }
+        as: "cart.menuItemDetails",
+      },
     });
     query.push({
-      $unwind: { path: "$cart.menuItemDetails", preserveNullAndEmptyArrays: true }
+      $unwind: {
+        path: "$cart.menuItemDetails",
+        preserveNullAndEmptyArrays: true,
+      },
     });
     query.push({
       $lookup: {
@@ -559,22 +564,35 @@ exports.listOrderByParams = async (req, res) => {
         pipeline: [
           { $unwind: "$menuItem" },
           { $unwind: "$menuItem.variants" },
-          { $match: { $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] } } },
-          { $project: { _id: 0, variantName: "$menuItem.variants.variantName", variantPrice: "$menuItem.variants.price" } }
+          {
+            $match: {
+              $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              variantName: "$menuItem.variants.variantName",
+              variantPrice: "$menuItem.variants.price",
+            },
+          },
         ],
-        as: "cart.variantDetails"
-      }
+        as: "cart.variantDetails",
+      },
     });
     query.push({
-      $unwind: { path: "$cart.variantDetails", preserveNullAndEmptyArrays: true }
+      $unwind: {
+        path: "$cart.variantDetails",
+        preserveNullAndEmptyArrays: true,
+      },
     });
     query.push({
       $lookup: {
         from: "toppingmasters",
         localField: "cart.toppings",
         foreignField: "_id",
-        as: "cart.toppingDetails"
-      }
+        as: "cart.toppingDetails",
+      },
     });
     // Group stage: Include the additional fields from the Order document.
     query.push({
@@ -585,16 +603,16 @@ exports.listOrderByParams = async (req, res) => {
         discountPrice: { $first: "$discountPrice" },
         subTotal: { $first: "$subTotal" }, // Existing subTotal field
         effectiveSubtotal: { $first: "$effectiveSubtotal" }, // Newly added field
-        cgst: { $first: "$cgst" },                         // Newly added field
-        sgst: { $first: "$sgst" },                         // Newly added field
-        totalTax: { $first: "$totalTax" },                 // Newly added field
+        cgst: { $first: "$cgst" }, // Newly added field
+        sgst: { $first: "$sgst" }, // Newly added field
+        totalTax: { $first: "$totalTax" }, // Newly added field
         grandTotal: { $first: "$grandTotal" },
         completionDateTime: { $first: "$completionDateTime" },
         remark: { $first: "$remark" },
         createdAt: { $first: "$createdAt" },
         userDetails: { $first: "$userDetails" },
-        cart: { $push: "$cart" }
-      }
+        cart: { $push: "$cart" },
+      },
     });
     // Projection stage: Expose the new fields in the final output.
     query.push({
@@ -622,7 +640,7 @@ exports.listOrderByParams = async (req, res) => {
               menuItem: "$$item.menuItemDetails.itemName",
               variant: {
                 name: "$$item.variantDetails.variantName",
-                price: "$$item.variantDetails.variantPrice"
+                price: "$$item.variantDetails.variantPrice",
               },
               toppings: {
                 $map: {
@@ -630,14 +648,14 @@ exports.listOrderByParams = async (req, res) => {
                   as: "t",
                   in: {
                     toppingName: "$$t.toppingName",
-                    toppingPrice: "$$t.price"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                    toppingPrice: "$$t.price",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (sorton && sortdir) {
       let sort = {};
@@ -650,11 +668,11 @@ exports.listOrderByParams = async (req, res) => {
       {
         $facet: {
           stage1: [{ $group: { _id: null, count: { $sum: 1 } } }],
-          stage2: [{ $skip: skip }, { $limit: per_page }]
-        }
+          stage2: [{ $skip: skip }, { $limit: per_page }],
+        },
       },
       { $unwind: "$stage1" },
-      { $project: { count: "$stage1.count", data: "$stage2" } }
+      { $project: { count: "$stage1.count", data: "$stage2" } },
     ]);
 
     const list = await Order.aggregate(query);
@@ -666,16 +684,6 @@ exports.listOrderByParams = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
 exports.updateOrder = async (req, res) => {
   try {
     const updatedOrder = await Order.findByIdAndUpdate(
@@ -686,8 +694,8 @@ exports.updateOrder = async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
-    eventEmitter.emit('orderUpdated', updatedOrder);
-    eventEmitter.emit('ordersUpdateTrigger');
+    eventEmitter.emit("orderUpdated", updatedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
     res.json({
       isOk: true,
       data: updatedOrder,
@@ -698,31 +706,32 @@ exports.updateOrder = async (req, res) => {
   }
 };
 
-
 exports.removeOrder = async (req, res) => {
   try {
     const removedOrder = await Order.findByIdAndDelete(req.params.id).exec();
     if (!removedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
-    eventEmitter.emit('orderDeleted', removedOrder);
-    eventEmitter.emit('ordersUpdateTrigger');
+    eventEmitter.emit("orderDeleted", removedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
     res.json({ isOk: true, message: "Order deleted successfully" });
   } catch (err) {
     res.status(500).json({ isOk: false, message: err.message });
   }
 };
 
-
 exports.listOrdersByBranch = async (req, res) => {
   try {
-    let { branchId, skip, per_page, sorton, sortdir, match, orderStatus } = req.body;
+    let { branchId, skip, per_page, sorton, sortdir, match, orderStatus } =
+      req.body;
 
     let pipeline = [];
 
     // Match by branch using the top-level field
     if (branchId) {
-      pipeline.push({ $match: { branch: new mongoose.Types.ObjectId(branchId) } });
+      pipeline.push({
+        $match: { branch: new mongoose.Types.ObjectId(branchId) },
+      });
     }
 
     // If orderStatus is provided, filter orders by that status
@@ -736,33 +745,34 @@ exports.listOrdersByBranch = async (req, res) => {
         $match: {
           $or: [
             { couponCode: { $regex: match, $options: "i" } },
-            { orderStatus: { $regex: match, $options: "i" } }
-          ]
-        }
+            { orderStatus: { $regex: match, $options: "i" } },
+          ],
+        },
       });
     }
 
     // Sorting stage
     pipeline.push({
-      $sort: sorton && sortdir
-        ? { [sorton]: sortdir === "desc" ? -1 : 1 }
-        : { createdAt: -1 }
+      $sort:
+        sorton && sortdir
+          ? { [sorton]: sortdir === "desc" ? -1 : 1 }
+          : { createdAt: -1 },
     });
 
     // Facet for pagination
     pipeline.push({
       $facet: {
         metadata: [{ $count: "total" }],
-        data: [{ $skip: parseInt(skip) }, { $limit: parseInt(per_page) }]
-      }
+        data: [{ $skip: parseInt(skip) }, { $limit: parseInt(per_page) }],
+      },
     });
 
     pipeline.push({ $unwind: "$metadata" });
     pipeline.push({
       $project: {
         count: "$metadata.total",
-        data: 1
-      }
+        data: 1,
+      },
     });
 
     const orders = await Order.aggregate(pipeline);
@@ -779,7 +789,9 @@ exports.updateOrderStatus = async (req, res) => {
     const { orderStatus } = req.body;
     const orderId = req.params.id;
     if (!orderStatus) {
-      return res.status(400).json({ isOk: false, message: "Order status is required" });
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Order status is required" });
     }
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
@@ -789,9 +801,13 @@ exports.updateOrderStatus = async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ isOk: false, message: "Order not found" });
     }
-    eventEmitter.emit('orderStatusUpdated', updatedOrder);
-    eventEmitter.emit('ordersUpdateTrigger');
-    res.json({ isOk: true, data: updatedOrder, message: "Order status updated successfully" });
+    eventEmitter.emit("orderStatusUpdated", updatedOrder);
+    eventEmitter.emit("ordersUpdateTrigger");
+    res.json({
+      isOk: true,
+      data: updatedOrder,
+      message: "Order status updated successfully",
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
@@ -843,6 +859,16 @@ exports.listUserOrders = async (req, res) => {
         },
       },
       { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "branches",
+          localField: "branch",
+          foreignField: "_id",
+          as: "branchDetails",
+        },
+      },
+      { $unwind: { path: "$branchDetails", preserveNullAndEmptyArrays: true } },
 
       // Unwind the cart array to work on each cart item separately
       { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
@@ -948,6 +974,7 @@ exports.listUserOrders = async (req, res) => {
           remark: { $first: "$remark" },
           createdAt: { $first: "$createdAt" },
           userDetails: { $first: "$userDetails" },
+          branchDetails: { $first: "$branchDetails" },
           cart: { $push: "$cart" },
         },
       },
@@ -968,6 +995,11 @@ exports.listUserOrders = async (req, res) => {
           remark: 1,
           createdAt: 1,
           userDetails: 1,
+          branch: {
+            name: "$branchDetails.branchName",
+            address: "$branchDetails.address",
+          },
+
           cart: {
             $map: {
               input: "$cart",
@@ -1012,6 +1044,4 @@ exports.listUserOrders = async (req, res) => {
     console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
   }
-
 };
-
