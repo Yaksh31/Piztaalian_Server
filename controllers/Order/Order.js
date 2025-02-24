@@ -676,6 +676,7 @@ exports.listOrderByParams = async (req, res) => {
     ]);
 
     const list = await Order.aggregate(query);
+    eventEmitter.emit("ordersListByParamsFetched", list);
     res.json(list);
   } catch (error) {
     console.log(error);
@@ -775,6 +776,7 @@ exports.listOrdersByBranch = async (req, res) => {
     });
 
     const orders = await Order.aggregate(pipeline);
+    eventEmitter.emit("ordersByBranchFetched", orders);
     res.json(orders);
   } catch (error) {
     console.error("Error fetching branch orders:", error);
@@ -1034,13 +1036,10 @@ exports.listUserOrders = async (req, res) => {
     const orders = await Order.aggregate(pipeline);
     res.json({ isOk: true, data: orders });
 
-    // eventEmitter.emit("orderStatusUpdated", updatedOrder);
-    // eventEmitter.emit("ordersUpdateTrigger");
-    // res.json({
-    //   isOk: true,
-    //   data: updatedOrder,
-    //   message: "Order status updated successfully",
-    // });
+    // eventEmitter.emit('orderStatusUpdated', updatedOrder);
+    // eventEmitter.emit('ordersUpdateTrigger');
+    // res.json({ isOk: true, data: updatedOrder, message: "Order status updated successfully" });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
