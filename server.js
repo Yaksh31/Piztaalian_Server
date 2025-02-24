@@ -14,12 +14,14 @@ const eventEmitter = require('./eventEmitter');
 
 
 global.__basedir = __dirname;
+const allowedOrigin1 = process.env.REACT_APP_API_URL;
+const allowedOrigin2 = process.env.REACT_APP_API_URL_BRANCH;
 
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: "*", // Allow all origins (update for production)
+    origin: ["allowedOrigin1","allowedOrigin2"], 
     methods: ["GET", "POST"]
   }
 });
@@ -115,6 +117,6 @@ app.use(async (err, req, res, next) => {
 
 const port = process.env.PORT || 8000;
 
-app.listen(port, () => {
-  console.log(`server is running on port ${port}`);
+server.listen(port, () => {
+  console.log(`Server and Socket.IO are running on port ${port}`);
 });
