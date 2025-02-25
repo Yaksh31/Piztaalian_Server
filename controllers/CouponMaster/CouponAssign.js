@@ -437,25 +437,95 @@ exports.redeemCoupon = async (req, res) => {
 };
 
 
+// exports.redeemDirectCoupon = async (req, res) => {
+//   try {
+//     const { couponCode, branchId, redeemerName, redeemerPhone } = req.body;
+//     if (!couponCode) {
+//       return res.status(400).json({ isOk: false, message: "Coupon code is required." });
+//     }
+//     // Removed subtotal validation and discount calculation based on it
+//     const coupon = await CouponMaster.findOne({ couponCode: couponCode.trim() });
+//     if (!coupon) {
+//       return res.status(404).json({ isOk: false, message: "Coupon not found." });
+//     }
+//     if (!coupon.isActive) {
+//       return res.status(400).json({ isOk: false, message: "Coupon is inactive." });
+//     }
+//     const currentDate = new Date();
+//     if (coupon.expiryDate && currentDate > new Date(coupon.expiryDate)) {
+//       return res.status(400).json({ isOk: false, message: "Coupon has expired." });
+//     }
+    
+//     // Record redemption details
+//     coupon.redeemedHistory = coupon.redeemedHistory || [];
+//     coupon.redeemedHistory.push({
+//       branch: branchId,
+//       redeemerName,
+//       redeemerPhone,
+//       redeemedAt: new Date(),
+//     });
+//     await coupon.save();
+    
+//     return res.status(200).json({
+//       isOk: true,
+//       message: "Coupon redeemed successfully.",
+//       data: {
+//         couponCode: coupon.couponCode,
+//         // You might include other coupon details if needed
+//         expiryDate: coupon.expiryDate,
+//         redemptionRecorded: true,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error in redeemDirectCoupon:", error);
+//     return res.status(500).json({ isOk: false, message: error.message });
+//   }
+// };
+
+
+
+
+
+
 
 
 exports.applyCouponPending = async (req, res) => {
   try {
-    const { uniqueCouponCode } = req.params;
-    if (!uniqueCouponCode) {
+    // Allow coupon code to be passed via URL param or request body.
+    let couponCode = req.params.uniqueCouponCode || req.body.couponCode;
+    if (!couponCode) {
       return res.status(400).json({ message: "Coupon code is required." });
     }
     
-    const couponAssign = await CouponAssign.findOne({ uniqueCouponCode })
+    // Try to find a coupon assignment with this coupon code.
+    let couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode.trim() })
       .populate("coupon")
       .exec();
-      
+
+    // If not found in CouponAssign, try to find the coupon in CouponMaster.
     if (!couponAssign) {
-      return res.status(404).json({ message: "Coupon not found." });
+      const couponMaster = await CouponMaster.findOne({ couponCode: couponCode.trim() });
+      if (!couponMaster) {
+        return res.status(404).json({ message: "Coupon not found." });
+      }
+      // Create new CouponAssign document for direct redemption.
+      // Mark it as nonInfluencer by setting nonInfluencer: true.
+      couponAssign = new CouponAssign({
+        coupon: couponMaster._id,
+        numberOfCoupons: 1, // or a default value as per your business rules.
+        uniqueCouponCode: couponCode.trim(),
+        isActive: couponMaster.isActive,
+        nonInfluencer: true,  // Mark this coupon as for direct redemption.
+      });
+      couponAssign = await couponAssign.save();
+      // Re-populate the coupon field.
+      couponAssign = await CouponAssign.findById(couponAssign._id).populate("coupon").exec();
     }
+    
     if (!couponAssign.isActive) {
       return res.status(400).json({ message: "Coupon is inactive." });
     }
+    
     const currentDate = new Date();
     if (
       couponAssign.coupon &&
@@ -490,6 +560,9 @@ exports.applyCouponPending = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error." });
   }
 };
+
+
+
 
 
 
@@ -763,7 +836,8 @@ exports.downloadCouponPDF = async (req, res) => {
 exports.downloadAllCouponsPDF = async (req, res) => {
   try {
     // Fetch all active CouponAssign documents
-    const couponAssigns = await CouponAssign.find({ isActive: true })
+    const couponAssigns = await CouponAssign.find({ isActive: true, nonInfluencer: { $ne: true } })
+    .populate("influencer")
       .populate("influencer")
       .populate("coupon")
       .populate("branch")
