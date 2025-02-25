@@ -2,28 +2,24 @@ const MenuMaster = require("../../models/MenuMaster/MenuMaster");
 const Branches = require("../../models/BranchMaster/BranchMaster");
 const fs = require("fs");
 const BranchMaster = require("../../models/BranchMaster/BranchMaster");
-
+const CategoryMaster = require("../../models/Category/CategoryMaster");
 const mongoose = require("mongoose");
 
 exports.getBranchesWithZeroMenuItems = async (req, res) => {
   try {
-   
     const allBranches = await BranchMaster.find({}, { _id: 1, branchName: 1 });
 
-   
     const branchesWithMenus = await MenuMaster.find({}, { branchName: 1 });
 
-    
     const menuBranchSet = new Set(
       branchesWithMenus.map((menu) => String(menu.branchName))
     );
 
-    
     const branchesWithoutMenus = allBranches.filter(
       (branch) => !menuBranchSet.has(String(branch._id))
     );
 
-    res.status(200).json(branchesWithoutMenus)
+    res.status(200).json(branchesWithoutMenus);
   } catch (error) {
     console.error("Error fetching branches without menu items:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -32,9 +28,8 @@ exports.getBranchesWithZeroMenuItems = async (req, res) => {
 
 exports.updateMenuMaster = async (req, res) => {
   try {
-    const { branchName, menuItem, isActive } = req.body; 
+    const { branchName, menuItem, isActive } = req.body;
 
-    
     let parsedMenuItem = [];
     if (typeof menuItem === "string") {
       try {
@@ -45,35 +40,35 @@ exports.updateMenuMaster = async (req, res) => {
     } else if (Array.isArray(menuItem)) {
       parsedMenuItem = menuItem;
     } else {
-     
       return res.status(400).json({ message: "menuItem must be an array." });
     }
 
     const additionalLinkFiles = {};
 
     const uploadDir = `${__basedir}/uploads/FoodImages`;
-    
+
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
         if (file.fieldname.startsWith("menuItem")) {
           const indexMatch = file.fieldname.match(/\d+/);
-          const index = indexMatch ? parseInt(indexMatch[0], 10) : null; 
+          const index = indexMatch ? parseInt(indexMatch[0], 10) : null;
           if (index !== null && !isNaN(index)) {
-            additionalLinkFiles[index] = compressImage(`uploads/FoodImages/${file.filename}`, uploadDir); 
+            additionalLinkFiles[index] = compressImage(
+              `uploads/FoodImages/${file.filename}`,
+              uploadDir
+            );
           }
         }
       });
     }
 
-   
     const updatedMenuItems = parsedMenuItem.map((item, index) => ({
       ...item,
-      foodImage: additionalLinkFiles[index] || item.foodImage, 
+      foodImage: additionalLinkFiles[index] || item.foodImage,
     }));
 
     let menuMaster = await MenuMaster.findOne({ branchName }).exec();
     if (!menuMaster) {
-    
       menuMaster = new MenuMaster({
         branchName,
         menuItem: updatedMenuItems,
@@ -88,7 +83,6 @@ exports.updateMenuMaster = async (req, res) => {
         data: menuMaster,
       });
     } else {
-      
       menuMaster.menuItem = updatedMenuItems;
       menuMaster.isActive = isActive;
       await menuMaster.save();
@@ -127,15 +121,17 @@ exports.updateMenuMasterByAdmin = async (req, res) => {
     }
 
     menuItem = menuItem.map((rawItem, index) => {
-      const spiceNum = rawItem.spiceLevel === "" ? null : Number(rawItem.spiceLevel) || null;
+      const spiceNum =
+        rawItem.spiceLevel === "" ? null : Number(rawItem.spiceLevel) || null;
 
       const cleanedToppings = (rawItem.toppings || []).map((group) => ({
-        toppingCategory: typeof group.toppingCategory === "object"
-          ? group.toppingCategory._id  // if it's { _id: "...", name: "..."}
-          : group.toppingCategory,     // otherwise, assume it's already a string
+        toppingCategory:
+          typeof group.toppingCategory === "object"
+            ? group.toppingCategory._id // if it's { _id: "...", name: "..."}
+            : group.toppingCategory, // otherwise, assume it's already a string
         toppings: (group.toppings || []).map((tId) =>
           typeof tId === "object" ? tId._id : tId
-        )
+        ),
       }));
 
       const cleanedVariants = (rawItem.variants || []).map((v) => ({
@@ -144,7 +140,7 @@ exports.updateMenuMasterByAdmin = async (req, res) => {
       }));
 
       const updatedItem = {
-        categoryName: String(rawItem.categoryName),    // must be an _id string
+        categoryName: String(rawItem.categoryName), // must be an _id string
         itemName: String(rawItem.itemName),
         price: Number(rawItem.price || 0),
         spiceLevel: spiceNum,
@@ -173,21 +169,19 @@ exports.updateMenuMasterByAdmin = async (req, res) => {
 
     return res.status(200).json({
       isOk: true,
-      message: menuMaster.isNew ? "MenuMaster created successfully" : "MenuMaster updated successfully",
+      message: menuMaster.isNew
+        ? "MenuMaster created successfully"
+        : "MenuMaster updated successfully",
       data: menuMaster,
     });
   } catch (error) {
     console.error("Error in upsert operation for MenuMaster:", error);
     return res.status(500).json({
       message: "An error occurred during the upsert operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
-
- 
-
 
 // exports.updateMenuMaster = async (req, res) => {
 //     try {
@@ -257,21 +251,19 @@ exports.updateMenuMasterByAdmin = async (req, res) => {
 
 exports.getMenuItemsByBranchId = async (req, res) => {
   try {
-    const { branchId } = req.params; 
+    const { branchId } = req.params;
 
-   
     if (!mongoose.Types.ObjectId.isValid(branchId)) {
       return res.status(400).json({
         message: "Invalid branch ID provided.",
       });
     }
 
-
-
     // Find the MenuMaster document for the given branchId
     const menuMaster = await MenuMaster.findOne({
-      branchName: branchId,})
-      // .populate("menuItem.categoryName") 
+      branchName: branchId,
+    })
+      // .populate("menuItem.categoryName")
       .populate({
         path: "menuItem.toppings.toppingCategory", // Populates topping category details
         model: "ToppingCategory",
@@ -327,7 +319,6 @@ exports.listMenuByParams = async (req, res) => {
       //   },
       // },
 
-      
       // {
       //   $lookup: {
       //     from: "toppingcategories",
@@ -475,17 +466,13 @@ exports.listMenuByParams = async (req, res) => {
   }
 };
 
-
 exports.getMenuById = async (req, res) => {
   try {
-    const { id } = req.params; 
-
-   
-     
+    const { id } = req.params;
 
     // Find the MenuMaster document for the given branchId
     const menuMaster = await MenuMaster.findById(id)
-      .populate("branchName") 
+      .populate("branchName")
       .populate({
         path: "menuItem.toppings.toppingCategory", // Populates topping category details
         model: "ToppingCategory",
@@ -519,7 +506,6 @@ exports.getMenuById = async (req, res) => {
   }
 };
 
-
 async function compressImage(file, uploadDir) {
   const filePath = path.join(uploadDir, file.filename);
   const compressedPath = path.join(uploadDir, `compressed-${file.filename}`);
@@ -552,3 +538,90 @@ async function compressImage(file, uploadDir) {
     return null;
   }
 }
+
+exports.getMenuItemByCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+
+    // Validate the categoryId
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({
+        message: "Invalid category ID provided.",
+      });
+    }
+
+    // Check that the category exists and both its IsActive and showCategory are true
+    const category = await CategoryMaster.findOne({
+      _id: new mongoose.Types.ObjectId(categoryId), //
+      IsActive: true,
+      showCategory: true,
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        message: "Category not found or not active/showCategory",
+      });
+    }
+
+    // Aggregate menu items from MenuMaster that belong to the given category and are active
+    const menuItems = await MenuMaster.aggregate([
+      // Unwind the menuItem array so we can filter individual items
+      { $unwind: "$menuItem" },
+      // Match only those menu items with the given category id and that are active
+      {
+        $match: {
+          "menuItem.categoryName": new mongoose.Types.ObjectId(categoryId),
+          "menuItem.isActive": true,
+        },
+      },
+      // Optionally, you can perform lookups to populate toppings details
+      {
+        $lookup: {
+          from: "toppingcategories", // Ensure this matches your actual collection name
+          localField: "menuItem.toppings.toppingCategory",
+          foreignField: "_id",
+          as: "toppingCategoryData",
+        },
+      },
+      {
+        $lookup: {
+          from: "toppingmasters", // Ensure this matches your actual collection name
+          localField: "menuItem.toppings.toppings",
+          foreignField: "_id",
+          as: "toppingsData",
+        },
+      },
+      // Project the desired fields from the menu item
+      {
+        $project: {
+          _id: "$menuItem._id",
+          branchName: 1,
+          itemName: "$menuItem.itemName",
+          price: "$menuItem.price",
+          spiceLevel: "$menuItem.spiceLevel",
+          isJain: "$menuItem.isJain",
+          checkedPrice: "$menuItem.checkedPrice",
+          description: "$menuItem.description",
+          foodImage: "$menuItem.foodImage",
+          isActive: "$menuItem.isActive",
+          variants: "$menuItem.variants",
+          toppings: "$menuItem.toppings",
+          toppingCategoryData: 1,
+          toppingsData: 1,
+        },
+      },
+    ]);
+
+    // Return the category details along with the matching menu items
+    return res.status(200).json({
+      category,
+      menuItems,
+    });
+  } catch (error) {
+    console.error("Error fetching menu items by category:", error);
+    res.status(500).json({
+      message: "An error occurred while fetching menu items by category",
+      error: error.message,
+    });
+  }
+};

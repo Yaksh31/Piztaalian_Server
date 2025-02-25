@@ -17,6 +17,11 @@ const CategoryMasterSchema = new mongoose.Schema(
       type: Boolean,
       default: true, // Optional: Sets default value for IsActive
     },
+    showCategory:{
+      type:Boolean,
+      
+      
+    }
   },
   { timestamps: true }
 );
