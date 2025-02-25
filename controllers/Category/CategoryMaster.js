@@ -61,11 +61,12 @@ exports.createCategoryMaster = async (req, res) => {
     ? await compressImage(req.file, uploadDir)
     : null;
 
-    let { categoryName, IsActive } = req.body;
+    let { categoryName, IsActive,showCategory } = req.body;
     const add = await new CategoryMaster({
       categoryName,
       bannerImage,
       IsActive,
+      showCategory,
     }).save();
     //const add = await new CategoryMaster(req.body).save();
     res.json(add);
@@ -103,7 +104,8 @@ exports.listCategoryMasterByParams = async (req, res) => {
 
     let query = [
       {
-        $match: { IsActive: IsActive },
+        $match: { IsActive: IsActive},
+       
       },
 
       {

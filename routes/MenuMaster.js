@@ -4,12 +4,13 @@ const multer = require("multer");
 const path = require("path");
 
 const {
- getBranchesWithZeroMenuItems,
+  getBranchesWithZeroMenuItems,
   getMenuItemsByBranchId,
   updateMenuMaster,
   listMenuByParams,
   getMenuById,
-  updateMenuMasterByAdmin
+  updateMenuMasterByAdmin,
+  getMenuItemByCategory,
 } = require("../controllers/MenuMaster/MenuMaster");
 
 // Route for creating or updating MenuMaster
@@ -37,5 +38,6 @@ router.get("/auth/get/branchForMenu", getBranchesWithZeroMenuItems);
 router.get("/auth/get/menuItems/:id", getMenuById);
 router.put("/auth/update/menu/:id", upload.any(), updateMenuMasterByAdmin);
 
+router.get("/auth/get/menuItemsByCategory/:categoryId", getMenuItemByCategory);
 
 module.exports = router;
