@@ -16,7 +16,9 @@ const {
   influencerDashboard,
   exportCouponRedeemDetails,
   getCouponAssignByCode,
-  applyCouponPending
+  applyCouponPending,
+  redeemDirectCoupon,
+  redeemDirectCouponByCode,
 } = require("../controllers/CouponMaster/CouponAssign");
 
 // Define routes
@@ -40,6 +42,8 @@ router.put("/auth/CouponAssign/update/:_id", catchAsync(updateCouponAssign));
 router.delete("/auth/CouponAssign/remove/:_id", catchAsync(removeCouponAssign));
 
 router.post("/auth/CouponAssign/redeem/:_id", catchAsync(redeemCoupon));
+
+router.post("/auth/coupon/redeemDirect", catchAsync(redeemDirectCoupon));
 
 router.get("/auth/CouponAssign/downloadPDF/:_id", catchAsync(downloadCouponPDF));
 

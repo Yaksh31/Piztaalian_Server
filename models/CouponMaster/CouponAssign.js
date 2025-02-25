@@ -6,7 +6,7 @@ const CouponAssignSchema = new mongoose.Schema(
     influencer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "InfluencerMaster", // Reference to the Influencer model
-      required: true,
+      
     },
     coupon: {
       type: mongoose.Schema.Types.ObjectId,
@@ -36,6 +36,9 @@ const CouponAssignSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+  },
+  nonInfluencer:{
+    type:Boolean,
   },
   
   redeemedHistory: [
