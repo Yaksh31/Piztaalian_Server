@@ -69,6 +69,13 @@ exports.createUserMaster = async (req, res) => {
         .json({ isOk: false, message: "Email already exists" });
     }
 
+    const phoneExists = await User.findOne({ phone }).exec();
+    if (phoneExists) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Phone number already exists" });
+    }
+
     // Ensure that at least one address is marked as default.
     // If none is marked as default, mark the first one as default.
     // const defaultFound = addresses.some(
@@ -793,7 +800,7 @@ exports.sendEmailOTP = async (req, res) => {
     // 1) Check if user exists
     let user = await User.findOne({ email }).exec();
     if (!user) {
-      return res.status(404).json({ isOk: false, message: "User not found" });
+      return res.status(201).json({ isOk: false, message: "User not found" });
     }
 
     // 2) Generate a 6-digit OTP (customize as you like)
