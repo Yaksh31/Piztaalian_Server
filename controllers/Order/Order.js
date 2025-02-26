@@ -657,22 +657,18 @@ exports.listOrderByParams = async (req, res) => {
         },
       },
     });
-    if (sorton && sortdir) {
-      let sort = {};
-      sort[sorton] = sortdir === "desc" ? -1 : 1;
-      query = [{ $sort: sort }].concat(query);
-    } else {
-      query = [{ $sort: { createdAt: -1 } }].concat(query);
-    }
+   
+    
+
     query = query.concat([
       {
         $facet: {
-          stage1: [{ $group: { _id: null, count: { $sum: 1 } } }],
-          stage2: [{ $skip: skip }, { $limit: per_page }],
+          metadata: [{ $count: "total" }],
+          data: [{ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: per_page }],
         },
       },
-      { $unwind: "$stage1" },
-      { $project: { count: "$stage1.count", data: "$stage2" } },
+      { $unwind: "$metadata" },
+      { $project: { count: "$metadata.total", data: 1 } },
     ]);
 
     const list = await Order.aggregate(query);
