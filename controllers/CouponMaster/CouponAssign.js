@@ -1172,7 +1172,10 @@ exports.sendCouponPDF = async (req, res) => {
     }
 
     // 2. Launch Puppeteer and generate the PDF (same as downloadCouponPDF)
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
     const page = await browser.newPage();
 
     // Prepare the QR code if present
