@@ -20,9 +20,13 @@ exports.createBannerImages = async (req, res) => {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
+    // let bannerImage = req.file
+    //   ? await compressImage(req.file, uploadDir)
+    //   : null;
+
     let bannerImage = req.file
-      ? await compressImage(req.file, uploadDir)
-      : null;
+    ? `uploads/BannerImg/${req.file.filename}`
+    : null;
 
     let { Title, keyWord, Description, IsActive } = req.body;
 
@@ -152,9 +156,13 @@ exports.updateBannerImages = async (req, res) => {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
+    // let bannerImage = req.file
+    //   ?  await compressImage(req.file, uploadDir)
+    //   : null;
+
     let bannerImage = req.file
-      ?  await compressImage(req.file, uploadDir)
-      : null;
+    ? `uploads/BannerImg/${req.file.filename}`
+    : null;
     let fieldvalues = { ...req.body };
     if (bannerImage != null) {
       fieldvalues.bannerImage = bannerImage;
