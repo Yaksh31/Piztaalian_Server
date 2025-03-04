@@ -2,6 +2,7 @@ const Influencer = require("../../../models/CouponMaster/InfluencerMaster");
 
 const fs = require("fs");
 const xlsx = require("xlsx");
+const { generateAccessToken } = require('../../../middlewares/auth');
 
 exports.getInfluencer = async (req, res) => {
   try {
@@ -394,6 +395,8 @@ exports.uploadExcel = async (req, res) => {
   }
 };
 
+ // Adjust the path accordingly
+
 exports.influencerLogin = async (req, res) => {
   const { email, password } = req.body;
 
@@ -401,28 +404,25 @@ exports.influencerLogin = async (req, res) => {
     // Find influencer by email
     const influencer = await Influencer.findOne({ email }).exec();
 
-    if (!influencer) {
-      return res.status(404).json({
-        isOk: false,
-        message: "Influencer not found",
-      });
-    }
-
-    // Verify password
-    if (influencer.password !== password) {
+    // Uniformly return 401 for both non-existent influencer or invalid password
+    if (!influencer || influencer.password !== password) {
       return res.status(401).json({
         isOk: false,
         message: "Invalid email or password",
       });
     }
 
-   
+    // Generate JWT token for the 'influencer' role
+    const token = generateAccessToken(influencer._id, "influencer");
+
+    // Exclude sensitive fields (e.g., password) before returning data
+    const { password: _, ...influencerData } = influencer.toObject();
 
     res.status(200).json({
       isOk: true,
       message: "Login successful",
-      data: influencer,
-      
+      data: influencerData,
+      token: token,
     });
   } catch (error) {
     console.error(error);
@@ -432,6 +432,7 @@ exports.influencerLogin = async (req, res) => {
     });
   }
 };
+
 
 
 

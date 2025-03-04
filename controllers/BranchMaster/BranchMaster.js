@@ -4,11 +4,15 @@ const jwt = require("jsonwebtoken");
 const State = require("../../models/Location/State");
 const City = require("../../models/Location/City");
 const Country = require("../../models/Location/Country");
+const { generateAccessToken } = require('../../middlewares/auth');
+
 
 exports.getBranch = async (req, res) => {
   try {
     // Find a branch by ID passed as a parameter
-    const branch = await Branch.findOne({ _id: req.params._id }).exec();
+    const branch = await Branch.findOne({ _id: req.params._id })
+    .exec();
+    
     if (!branch) {
       return res.status(404).json({ message: "Branch not found" });
     }
@@ -114,6 +118,7 @@ exports.createBranch = async (req, res) => {
 exports.listBranch = async (req, res) => {
   try {
     const list = await Branch.find({ isActive: true })
+      .select('-password')
       .sort({ createdAt: -1 })
       .exec();
     res.json(list);
@@ -283,7 +288,7 @@ exports.updateBranch = async (req, res) => {
     // Extract email and phone to check uniqueness
     const { email, phone, branchName } = req.body;
 
-    
+
 
     // Check if branch name exists for another branch
     const branchNameExists = await Branch.findOne({
@@ -351,36 +356,28 @@ exports.branchLogin = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Find branch by email
+    // Attempt to find the branch using the provided email
     const branch = await Branch.findOne({ email }).exec();
 
-    if (!branch) {
-      return res.status(404).json({
-        isOk: false,
-        message: "Branch not found",
-      });
-    }
-
-    // Verify password
-    if (branch.password !== password) {
+    // Return a uniform 401 response for authentication failures to avoid information leakage
+    if (!branch || branch.password !== password) {
       return res.status(401).json({
         isOk: false,
         message: "Invalid email or password",
       });
     }
 
-    // Generate JWT token
-    // const token = jwt.sign(
-    //   { id: branch._id, role: "branch", branchName: branch.branchName },
-    //   process.env.JWT_SECRET_TOKEN,
-    //   { expiresIn: "1d" } // Token valid for 1 day
-    // );
+    // Generate JWT token for the 'branch' role
+    const token = generateAccessToken(branch._id, "branch");
+
+    // Exclude sensitive information from the branch data before sending the response
+    const { password: _, ...branchData } = branch.toObject();
 
     res.status(200).json({
       isOk: true,
       message: "Login successful",
-
-      data: branch,
+      data: branchData,
+      token: token,
     });
   } catch (error) {
     console.error(error);

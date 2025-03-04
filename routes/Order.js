@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const catchAsync = require("../utils/catchAsync");
+const { authMiddleware } = require("../middlewares/auth");
 
 const {
   getOrder,
@@ -14,15 +15,15 @@ const {
   listUserOrders
 } = require("../controllers/Order/Order");
 
-router.post("/auth/order/create", catchAsync(createOrder));
+router.post("/auth/order/create",authMiddleware(["USER"]), catchAsync(createOrder));
 router.get("/auth/order/get/:id", catchAsync(getOrder));
-router.get("/auth/order/list", catchAsync(listOrders));
-router.post("/auth/order/listByParams", catchAsync(listOrderByParams));
-router.put("/auth/order/update/:id", catchAsync(updateOrder));
-router.delete("/auth/order/remove/:id", catchAsync(removeOrder));
-router.post("/auth/order/listByBranch", catchAsync(listOrdersByBranch));
-router.patch("/auth/order/:id", catchAsync(updateOrderStatus));
+router.get("/auth/order/list" ,authMiddleware(["ADMIN","BRANCH"]), catchAsync(listOrders));
+router.post("/auth/order/listByParams",authMiddleware(["ADMIN","BRANCH"]), catchAsync(listOrderByParams));
+router.put("/auth/order/update/:id",authMiddleware(["ADMIN","BRANCH"]), catchAsync(updateOrder));
+router.delete("/auth/order/remove/:id",authMiddleware(["ADMIN","BRANCH"]), catchAsync(removeOrder));
+router.post("/auth/order/listByBranch",authMiddleware(["ADMIN","BRANCH"]), catchAsync(listOrdersByBranch));
+router.patch("/auth/order/:id",authMiddleware(["ADMIN","BRANCH"]), catchAsync(updateOrderStatus));
 
-router.get("/auth/order/user/:userId", catchAsync(listUserOrders));
+router.get("/auth/order/user/:userId",authMiddleware(["ADMIN","BRANCH","USER"]), catchAsync(listUserOrders));
 
 module.exports = router;

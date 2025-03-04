@@ -4,6 +4,7 @@ const router = express.Router();
 
 const catchAsync = require("../utils/catchAsync");
 const CouponMaster = require("../models/CouponMaster/CouponMaster");
+const { authMiddleware } = require("../middlewares/auth");
 
 
 
@@ -24,21 +25,21 @@ const {
 
 
 
-router.post("/auth/create/CouponMaster",  catchAsync(createCouponMaster));
+router.post("/auth/create/CouponMaster", authMiddleware(["ADMIN"]), catchAsync(createCouponMaster));
 
-router.get("/auth/list/CouponMaster", catchAsync(listCouponMaster));
+router.get("/auth/list/CouponMaster", authMiddleware(["ADMIN"]), catchAsync(listCouponMaster));
 
-router.post("/auth/list-by-params/CouponMaster", catchAsync(listCouponMasterByParams));
+router.post("/auth/list-by-params/CouponMaster", authMiddleware(["ADMIN"]), catchAsync(listCouponMasterByParams));
 
 router.get("/auth/get/CouponMaster/:_id", catchAsync(getCouponMaster));
 
-router.put("/auth/update/CouponMaster/:_id",  catchAsync(updateCouponMaster)
+router.put("/auth/update/CouponMaster/:_id", authMiddleware(["ADMIN"]),  catchAsync(updateCouponMaster)
 );
 
-router.delete("/auth/remove/CouponMaster/:_id", catchAsync(removeCouponMaster)
+router.delete("/auth/remove/CouponMaster/:_id", authMiddleware(["ADMIN"]), catchAsync(removeCouponMaster)
 );
 
-router.get("/auth/:_id/terms", getCouponTerms);
+router.get("/auth/:_id/terms", authMiddleware(["ADMIN"]), getCouponTerms);
 
 
 

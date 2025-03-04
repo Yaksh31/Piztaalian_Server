@@ -3,7 +3,8 @@ const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const MenuMaster = require("../../models/MenuMaster/MenuMaster");
 const ToppingMaster = require("../../models/Topping/ToppingMaster");
-const CouponAssign = require("../../models/CouponMaster/CouponAssign")
+const CouponAssign = require("../../models/CouponMaster/CouponAssign");
+const { generateAccessToken } = require('../../middlewares/auth');
 
 
 const nodemailer = require("nodemailer");
@@ -348,24 +349,28 @@ exports.userLoginMaster = async (req, res) => {
       return res.status(401).json({ isOk: false, message: "User not found" });
     }
 
-    //const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res
-        .status(401)
-        .json({ isOk: false, message: "Authentication failed" });
+    // Uncomment and use bcrypt.compare if your passwords are hashed:
+    // const isMatch = await bcrypt.compare(password, user.password);
+    // For demonstration, using plain text password comparison:
+    if (user.password !== password) {
+      return res.status(401).json({ isOk: false, message: "Authentication failed" });
     }
 
+    // Generate JWT token for the 'user' role
+    const token = generateAccessToken(user._id, "user");
+
+    // Exclude the password field from the response
     const { password: _, ...userData } = user.toObject();
+
     res.status(200).json({
       isOk: true,
       message: "Authentication successful",
       data: userData,
+      token: token
     });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({ isOk: false, message: "An error occurred while logging in" });
+    res.status(500).json({ isOk: false, message: "An error occurred while logging in" });
   }
 };
 
@@ -865,13 +870,16 @@ exports.verifyEmailOTP = async (req, res) => {
     user.otpExpiresAt = null;
     await user.save();
 
-    // 4) Here you can choose to create a session token, JWT, etc.
-    // For now, just return success plus user data (without password & OTP fields).
+    // 4) Generate a JWT token for the user role "USER"
+    const token = generateAccessToken(user._id, "user");
+
+    // 5) Return success plus user data (without password & OTP fields) and token
     const { password, otp: unused, otpExpiresAt, ...rest } = user.toObject();
     return res.json({
       isOk: true,
       message: "OTP verified successfully",
-      data: rest, // user fields except password/otp
+      data: rest,
+      token: token,
     });
   } catch (error) {
     console.error(error);
