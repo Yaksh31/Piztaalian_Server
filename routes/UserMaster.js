@@ -22,13 +22,15 @@ const {
   removeAddress,
   getGrandTotal,
   sendEmailOTP,
-  verifyEmailOTP
+  verifyEmailOTP,
+  getUserProfile
 } = require("../controllers/UserMaster/UserMaster");
 
 router.post("/auth/create/user", catchAsync(createUserMaster));
 router.get("/auth/list/user",authMiddleware(["ADMIN"]), catchAsync(listUserMaster));
 router.post("/auth/listByParams/user",authMiddleware(["ADMIN"]), catchAsync(listUserMasterByParams));
-router.get("/auth/get/user/:_id",authMiddleware(["ADMIN","USER"]), catchAsync(getUserMaster));
+router.get("/auth/get/user/:_id",authMiddleware(["USER"]), catchAsync(getUserMaster));
+router.get("/auth/profile/:_id",authMiddleware(["ADMIN"]), getUserProfile);
 router.put("/auth/update/user/:_id",authMiddleware(["USER"]), catchAsync(updateUserMaster));
 router.delete("/auth/remove/user/:_id",authMiddleware(["ADMIN"]), catchAsync(removeUserMaster));
 router.post("/auth/login", catchAsync(userLoginMaster));

@@ -12,8 +12,25 @@ const nodemailer = require("nodemailer");
 exports.getUserMaster = async (req, res) => {
   try {
     const user = await User.findById(req.params._id).exec();
+    
     if (!user) {
       return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({ isOk: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    // Use req.params.id instead of req.params._id for a different route parameter name
+    const user = await User.findById(req.params._id)
+    .select("-password -otp -otpExpiresAt")
+      .exec();
+      
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User profile not found" });
     }
     res.json({ isOk: true, data: user });
   } catch (error) {

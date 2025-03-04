@@ -512,8 +512,11 @@ exports.listOrderByParams = async (req, res) => {
     query.push({
       $lookup: {
         from: "usermasters",
-        localField: "userId",
-        foreignField: "_id",
+        let: { userId: "$userId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+          { $project: { password: 0 , otp: 0, otpExpiresAt: 0} }
+        ],
         as: "userDetails",
       },
     });

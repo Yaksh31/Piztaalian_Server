@@ -38,7 +38,7 @@ router.get("/auth/branches/list",catchAsync(listBranch));
 router.post("/auth/branches/listByParams", catchAsync(listBranchByParams));
 
 // Get a branch by ID
-router.get("/auth/branches/:_id", authMiddleware(["ADMIN"]), catchAsync(getBranch));
+router.get("/auth/branches/:_id", authMiddleware(["ADMIN","BRANCH"]), catchAsync(getBranch));
 
 // Update a branch
 router.put("/auth/branches/update/:_id",  authMiddleware(["BRANCH","ADMIN"]),upload.single("branchImage"), catchAsync(updateBranch));
