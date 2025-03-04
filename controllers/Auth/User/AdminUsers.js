@@ -1,6 +1,8 @@
 const { default: mongoose } = require("mongoose");
 const User = require("../../../models/Auth/User/AdminUsers");
 const fs = require("fs");
+const { generateAccessToken } = require('../../../middlewares/auth');
+
 
 exports.getAdminUser = async (req, res) => {
   try {
@@ -186,32 +188,41 @@ exports.removeAdminUser = async (req, res) => {
 exports.userLoginAdmin = async (req, res) => {
   const { email, password } = req.body;
   try {
-    const usermp = await User.findOne({ email: email }).exec();
-    if (usermp) {
-      if (usermp.password !== password) {
-        return res.status(200).json({
-          isOk: false,
-          filed: 1,
-          message: "Authentication Failed",
-        });
-      } else {
-        res.status(200).json({
-          isOk: true,
-          message: "Authentication Successfull",
-          data: usermp,
-        });
-      }
-    } else {
-      res.status(200).json({
+    const adminUser = await User.findOne({ email }).exec();
+    if (!adminUser) {
+      return res.status(401).json({
         isOk: false,
         message: "Admin User not Found",
       });
     }
+
+    // Uncomment and use bcrypt.compare if your passwords are hashed:
+    // const isMatch = await bcrypt.compare(password, adminUser.password);
+    // For demonstration, using plain text password comparison:
+    if (adminUser.password !== password) {
+      return res.status(401).json({
+        isOk: false,
+        message: "Authentication Failed",
+      });
+    }
+
+    // Generate JWT token for the 'admin' role
+    const token = generateAccessToken(adminUser._id, "admin");
+
+    // Exclude sensitive fields such as the password from the response
+    const { password: _, ...adminData } = adminUser.toObject();
+
+    res.status(200).json({
+      isOk: true,
+      message: "Authentication Successful",
+      data: adminData,
+      token: token,
+    });
   } catch (err) {
     console.error(err);
-    res.status(200).json({
+    res.status(500).json({
       isOk: false,
-      message: "An error occurred while logging in adminpanel",
+      message: "An error occurred while logging in admin panel",
     });
   }
 };

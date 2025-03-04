@@ -13,6 +13,7 @@ const axios = require("axios");
 const eventEmitter = require('./eventEmitter');
 
 
+
 global.__basedir = __dirname;
 const allowedOrigin1 = process.env.REACT_APP_API_URL;
 const allowedOrigin2 = process.env.REACT_APP_API_URL_BRANCH;
@@ -21,7 +22,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: [allowedOrigin1,allowedOrigin2], 
+    origin: ["*"], 
     methods: ["GET", "POST"]
   }
 });

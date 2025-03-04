@@ -13,6 +13,7 @@ const {
   userLoginAdmin,
 } = require("../controllers/Auth/User/AdminUsers");
 const multer = require("multer");
+const { authMiddleware } = require("../middlewares/auth");
 
 const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -26,17 +27,13 @@ const multerStorage = multer.diskStorage({
 });
 
 const upload = multer({ storage: multerStorage });
-router.post("/auth/create/adminUser",upload.single("myFile"), catchAsync(createAdminUser));
+router.post("/auth/create/adminUser", authMiddleware(["ADMIN"]), upload.single("myFile"), catchAsync(createAdminUser));
+router.get("/auth/list/adminUser", authMiddleware(["ADMIN"]), catchAsync(listAdminUser));
+router.post("/auth/listByparams/adminUser", authMiddleware(["ADMIN"]), catchAsync(listAdminUserByParams));
+router.get("/auth/get/adminUser/:_id", authMiddleware(["ADMIN"]), catchAsync(getAdminUser));
+router.put("/auth/update/adminUser/:_id", authMiddleware(["ADMIN"]), upload.single("myFile"), catchAsync(updateAdminUser));
+router.delete("/auth/remove/adminUser/:_id", authMiddleware(["ADMIN"]), catchAsync(removeAdminUser));
 
-router.get("/auth/list/adminUser", catchAsync(listAdminUser));
-
-router.post("/auth/listByparams/adminUser", catchAsync(listAdminUserByParams));
-
-router.get("/auth/get/adminUser/:_id", catchAsync(getAdminUser));
-
-router.put("/auth/update/adminUser/:_id",upload.single("myFile"), catchAsync(updateAdminUser));
-
-router.delete("/auth/remove/adminUser/:_id", catchAsync(removeAdminUser));
 
 router.post("/adminLogin", catchAsync(userLoginAdmin));
 

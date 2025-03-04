@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const catchAsync = require("../utils/catchAsync");
+const { authMiddleware } = require("../middlewares/auth");
 
 const {
   createComplains,
@@ -33,18 +34,18 @@ router.post(
   catchAsync(createComplains)
 );
 
-router.get("/auth/list/complain", catchAsync(listComplains));
+router.get("/auth/list/complain",authMiddleware(["ADMIN", "BRANCH"]), catchAsync(listComplains));
 
-router.post("/auth/list-by-params/complain", catchAsync(listComplainsByParams));
+router.post("/auth/list-by-params/complain",authMiddleware(["ADMIN", "BRANCH"]), catchAsync(listComplainsByParams));
 
-router.get("/auth/get/complain/:_id", catchAsync(getComplains));
+router.get("/auth/get/complain/:_id", authMiddleware(["USER", "ADMIN", "BRANCH"]), catchAsync(getComplains));
 
 router.put(
-  "/auth/update/complain/:_id",
+  "/auth/update/complain/:_id",authMiddleware(["ADMIN"]),
   upload.single("myFile"),
   catchAsync(updateComplains)
 );
 
-router.delete("/auth/remove/complain/:_id", catchAsync(removeComplains));
+router.delete("/auth/remove/complain/:_id",authMiddleware(["ADMIN"]), catchAsync(removeComplains));
 
 module.exports = router;

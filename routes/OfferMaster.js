@@ -1,6 +1,7 @@
 const express = require("express");
 
 const router = express.Router();
+const { authMiddleware } = require("../middlewares/auth");
 
 const catchAsync = require("../utils/catchAsync");
 const {
@@ -28,7 +29,7 @@ const multerStorage = multer.diskStorage({
 
 const upload = multer({ storage: multerStorage });
 router.post(
-  "/auth/create/offer",
+  "/auth/create/offer",authMiddleware(["ADMIN"]),
   upload.single("myFile"),
   catchAsync(createOffer)
 );
@@ -40,12 +41,12 @@ router.post("/auth/listByparams/offer", catchAsync(listOfferByParams));
 router.get("/auth/get/offer/:_id", catchAsync(getOffer));
 
 router.put(
-  "/auth/update/offer/:_id",
+  "/auth/update/offer/:_id",authMiddleware(["ADMIN"]),
   upload.single("myFile"),
   catchAsync(updateOffer)
 );
 
-router.delete("/auth/remove/offer/:_id", catchAsync(removeOffer));
+router.delete("/auth/remove/offer/:_id",authMiddleware(["ADMIN"]), catchAsync(removeOffer));
 
 //router.post("/adminLogin", catchAsync(userLoginAdmin));
 

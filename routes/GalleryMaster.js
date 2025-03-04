@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const catchAsync = require("../utils/catchAsync");
+const { authMiddleware } = require("../middlewares/auth");
 
 const {
   createGallery,
@@ -29,7 +30,7 @@ const upload = multer({ storage: multerStorage });
 
 router.post(
   "/auth/create/gallery",
-  upload.single("myFile"),
+  upload.single("myFile"),authMiddleware(["ADMIN"]),
   catchAsync(createGallery)
 );
 
@@ -41,11 +42,11 @@ router.get("/auth/get/gallery/:_id", catchAsync(getGallery));
 
 router.put(
   "/auth/update/gallery/:_id",
-  upload.single("myFile"),
+  upload.single("myFile"),authMiddleware(["ADMIN"]),
   catchAsync(updateGallery)
 );
 
-router.delete("/auth/remove/gallery/:_id", catchAsync(removeGallery));
+router.delete("/auth/remove/gallery/:_id",authMiddleware(["ADMIN"]), catchAsync(removeGallery));
 
 const multerStorageProduct = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -59,7 +60,7 @@ const multerStorageProduct = multer.diskStorage({
 const uploadProductCK = multer({ storage: multerStorageProduct });
 
 router.post(
-  "/auth/gallery-master/image-upload",
+  "/auth/gallery-master/image-upload", authMiddleware(["ADMIN"]),
   uploadProductCK.single("uploadImg"),
   async (req, res) => {
     console.log(req.file.filename);
