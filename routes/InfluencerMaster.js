@@ -36,9 +36,9 @@ router.get("/auth/list/Influencer", authMiddleware(["ADMIN"]), catchAsync(listIn
 
 router.post("/auth/listByparams/Influencer", authMiddleware(["ADMIN"]), catchAsync(listInfluencerByParams));
 
-router.get("/auth/get/Influencer/:_id", authMiddleware(["ADMIN"]), catchAsync(getInfluencer));
+router.get("/auth/get/Influencer/:_id", authMiddleware(["ADMIN","INFLUENCER"]), catchAsync(getInfluencer));
 
-router.put("/auth/update/Influencer/:id", authMiddleware(["ADMIN"]), catchAsync(updateInfluencer));
+router.put("/auth/update/Influencer/:id", authMiddleware(["ADMIN","INFLUENCER"]), catchAsync(updateInfluencer));
 
 router.delete("/auth/remove/Influencer/:_id", authMiddleware(["ADMIN"]), catchAsync(removeInfluencer));
 
