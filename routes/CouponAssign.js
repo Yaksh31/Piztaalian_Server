@@ -34,7 +34,7 @@ router.get("/auth/CouponAssign/list",authMiddleware(["ADMIN"]), catchAsync(listC
 router.post("/auth/CouponAssign/listByParams",authMiddleware(["ADMIN"]), catchAsync(listCouponAssignByParams));
 
 // Get a coupon assignment by ID
-router.get("/auth/couponAssign/get/:_id",authMiddleware(["ADMIN"]), catchAsync(getCouponAssign));
+router.get("/auth/couponAssign/get/:_id",authMiddleware(["ADMIN","BRANCH"]), catchAsync(getCouponAssign));
 
 // Update a coupon assignment
 router.put("/auth/CouponAssign/update/:_id",authMiddleware(["ADMIN"]), catchAsync(updateCouponAssign));
