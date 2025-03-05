@@ -42,7 +42,7 @@ router.put("/auth/CouponAssign/update/:_id",authMiddleware(["ADMIN"]), catchAsyn
 // Remove a coupon assignment
 router.delete("/auth/CouponAssign/remove/:_id",authMiddleware(["ADMIN"]), catchAsync(removeCouponAssign));
 
-router.post("/auth/CouponAssign/redeem/:_id", authMiddleware(["USER", "ADMIN", "BRANCH"]), catchAsync(redeemCoupon));
+router.post("/auth/CouponAssign/redeem/:_id", catchAsync(redeemCoupon));
 
 router.post("/auth/coupon/redeemDirect", catchAsync(redeemDirectCoupon));
 
