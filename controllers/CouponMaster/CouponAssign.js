@@ -552,7 +552,7 @@ exports.applyCouponPending = async (req, res) => {
     await couponAssign.save();
     return res.status(200).json({
       isOk: true,
-      message: "Coupon applied successfully (pending order confirmation).",
+      message: "Coupon applied successfully.",
       data: couponAssign,
     });
   } catch (err) {
