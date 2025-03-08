@@ -515,7 +515,7 @@ exports.listOrderByParams = async (req, res) => {
         let: { userId: "$userId" },
         pipeline: [
           { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-          { $project: { password: 0 , otp: 0, otpExpiresAt: 0} }
+          { $project: { password: 0, otp: 0, otpExpiresAt: 0 } }
         ],
         as: "userDetails",
       },
@@ -601,6 +601,7 @@ exports.listOrderByParams = async (req, res) => {
     query.push({
       $group: {
         _id: "$_id",
+        orderId: { $first: "$orderId" },
         orderStatus: { $first: "$orderStatus" },
         couponCode: { $first: "$couponCode" },
         discountPrice: { $first: "$discountPrice" },
@@ -621,6 +622,7 @@ exports.listOrderByParams = async (req, res) => {
     query.push({
       $project: {
         orderStatus: 1,
+        orderId: 1,
         couponCode: 1,
         discountPrice: 1,
         subTotal: 1,
@@ -660,8 +662,8 @@ exports.listOrderByParams = async (req, res) => {
         },
       },
     });
-   
-    
+
+
 
     query = query.concat([
       {

@@ -44,6 +44,16 @@ const CartItemSchema = new Schema(
 
 const OrderSchema = new Schema(
   {
+    orderId: {
+      type: String,
+      required: true,
+      unique: true,
+      default: function() {
+        // Utilize Date.now() and extract a 6-digit segment
+        const sixDigitSegment = (Date.now() % 1000000).toString().padStart(6, "0");
+        return "ORD" + sixDigitSegment;
+      },
+    },
     cart: {
       type: [CartItemSchema],
       default: [],

@@ -11,6 +11,7 @@ const { throws } = require("assert");
 require("dotenv").config();
 const axios = require("axios");
 const eventEmitter = require('./eventEmitter');
+const jwt = require("jsonwebtoken");
 
 
 
@@ -22,14 +23,83 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: ["*"], 
-    methods: ["GET", "POST"]
+    origin: [allowedOrigin1, allowedOrigin2],
+    methods: ["GET", "POST"],
+    credentials: true,
   }
 });
 
-eventEmitter.on('newOrder', (order) => {
-  io.emit('orderCreated', order);
+// Logging connection events for better traceability
+io.on("connection", (socket) => {
+  console.log(`Client connected: ${socket.id}`);
+  
+  socket.on("disconnect", () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
 });
+
+io.on("error", (err) => {
+  console.error("Socket.IO error event:", err);
+});
+
+// io.use((socket, next) => {
+//   const token = socket.handshake.query.token;
+//   if (!token) {
+//     return next(new Error("Authentication error: Token missing"));
+//   }
+//   jwt.verify(token, process.env.ADMIN_JWT_SECRET_TOKEN, (err, decoded) => {
+//     if (err) {
+//       return next(new Error("Authentication error: Invalid token"));
+//     }
+//     socket.decoded = decoded;
+//     next();
+//   });
+// });
+
+
+// Subscribe to eventEmitter events from controllers and broadcast them to clients
+eventEmitter.on("newOrder", (order) => {
+  io.emit("orderCreated", order);
+});
+
+eventEmitter.on("orderUpdated", (order) => {
+  io.emit("orderUpdated", order);
+});
+
+eventEmitter.on("orderDeleted", (order) => {
+  io.emit("orderDeleted", order);
+});
+
+eventEmitter.on("ordersListByParamsFetched", (data) => {
+  io.emit("ordersListByParamsFetched", data);
+});
+
+eventEmitter.on("ordersByBranchFetched", (data) => {
+  io.emit("ordersByBranchFetched", data);
+});
+
+eventEmitter.on("orderStatusUpdated", (order) => {
+  io.emit("orderStatusUpdated", order);
+});
+
+eventEmitter.on("ordersUpdateTrigger", () => {
+  io.emit("ordersUpdateTrigger");
+});
+
+// io.use((socket, next) => {
+//   const token = socket.handshake.query.token;
+//   if (!token) {
+//     return next(new Error("Authentication error: Token missing"));
+//   }
+  
+//   jwt.verify(token, process.env.ADMIN_JWT_SECRET_TOKEN, (err, decoded) => {
+//     if (err) {
+//       return next(new Error("Authentication error: Invalid token"));
+//     }
+//     socket.decoded = decoded;
+//     next();
+//   });
+// });
 
 
 let databasestatus = "In-Progress";
