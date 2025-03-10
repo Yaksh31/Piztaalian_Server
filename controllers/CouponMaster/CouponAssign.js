@@ -1,13 +1,13 @@
 const Branch = require("../../models/BranchMaster/BranchMaster");
 const fs = require("fs");
-const path = require('path');
+const path = require("path");
 const jwt = require("jsonwebtoken");
-const InfluencerMaster = require("../../models/CouponMaster/InfluencerMaster")
-const CouponMaster = require("../../models/CouponMaster/CouponMaster")
+const InfluencerMaster = require("../../models/CouponMaster/InfluencerMaster");
+const CouponMaster = require("../../models/CouponMaster/CouponMaster");
 const QRCode = require("qrcode");
-const CouponAssign = require("../../models/CouponMaster/CouponAssign")
-const archiver = require('archiver');
-const PDFDocument = require('pdfkit');
+const CouponAssign = require("../../models/CouponMaster/CouponAssign");
+const archiver = require("archiver");
+const PDFDocument = require("pdfkit");
 const nodemailer = require("nodemailer");
 const axios = require("axios");
 const XLSX = require("xlsx");
@@ -21,10 +21,12 @@ exports.getCouponAssignByCode = async (req, res) => {
     if (!couponCode) {
       return res.status(400).json({ message: "Coupon code is required." });
     }
-    const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode })
-      .populate('influencer')
-      .populate('coupon')
-      .populate('branch')
+    const couponAssign = await CouponAssign.findOne({
+      uniqueCouponCode: couponCode,
+    })
+      .populate("influencer")
+      .populate("coupon")
+      .populate("branch")
       .exec();
     if (!couponAssign) {
       return res.status(404).json({ message: "Coupon not found." });
@@ -36,18 +38,13 @@ exports.getCouponAssignByCode = async (req, res) => {
   }
 };
 
-
-
-
-
 exports.getCouponAssign = async (req, res) => {
   try {
-
     const couponAssign = await CouponAssign.findById(req.params._id)
-      .populate('influencer')
-      .populate('coupon')
-      .populate('qrCodeUrl')
-      .populate('branch')
+      .populate("influencer")
+      .populate("coupon")
+      .populate("qrCodeUrl")
+      .populate("branch")
       .exec();
 
     if (!couponAssign) {
@@ -64,27 +61,30 @@ exports.getCouponAssign = async (req, res) => {
   }
 };
 
-
-
-
-
 // controllers/CouponAssignController.js
-
-
 
 exports.createCouponAssign = async (req, res) => {
   try {
     const { influencer, coupon, numberOfCoupons, branch, isActive } = req.body;
 
     // Validate fields
-    if (!influencer || !Array.isArray(influencer) || !coupon || !numberOfCoupons || !branch) {
+    if (
+      !influencer ||
+      !Array.isArray(influencer) ||
+      !coupon ||
+      !numberOfCoupons ||
+      !branch
+    ) {
       return res.status(400).json({
-        message: "All fields (influencer, coupon, numberOfCoupons, branch) are required.",
+        message:
+          "All fields (influencer, coupon, numberOfCoupons, branch) are required.",
       });
     }
 
     // Fetch Influencer and Coupon data
-    const influencerData = await InfluencerMaster.find({ _id: { $in: influencer } }).exec();
+    const influencerData = await InfluencerMaster.find({
+      _id: { $in: influencer },
+    }).exec();
     const couponData = await CouponMaster.findById(coupon).exec();
 
     if (!influencerData.length || !couponData) {
@@ -95,7 +95,9 @@ exports.createCouponAssign = async (req, res) => {
 
     // Function to generate unique coupon code
     const generateUniqueCouponCode = (influencerName, couponCode) => {
-      return `${influencerName.slice(0, 3).toUpperCase()}_${couponCode.slice(0, 3).toUpperCase()}_${Date.now().toString().slice(-4)}`;
+      return `${influencerName.slice(0, 3).toUpperCase()}_${couponCode
+        .slice(0, 3)
+        .toUpperCase()}_${Date.now().toString().slice(-4)}`;
     };
 
     // Ensure the uploads directory exists
@@ -107,7 +109,10 @@ exports.createCouponAssign = async (req, res) => {
     const createdAssignments = []; // To store all created assignments
 
     for (const inf of influencerData) {
-      const uniqueCouponCode = generateUniqueCouponCode(inf.name, couponData.couponCode);
+      const uniqueCouponCode = generateUniqueCouponCode(
+        inf.name,
+        couponData.couponCode
+      );
 
       // Create new CouponAssign document
       const newCouponAssign = new CouponAssign({
@@ -141,23 +146,22 @@ exports.createCouponAssign = async (req, res) => {
       data: createdAssignments,
       message: "Coupons assigned successfully with QR codes generated.",
     });
-
   } catch (err) {
     console.error(err);
     return res.status(500).send({ error: err.message });
   }
 };
 
-
 exports.listBranch = async (req, res) => {
   try {
-    const list = await Branch.find({ isActive: true }).sort({ createdAt: -1 }).exec();
+    const list = await Branch.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .exec();
     res.json(list);
   } catch (error) {
     return res.status(400).send(error);
   }
 };
-
 
 exports.listCouponAssignByParams = async (req, res) => {
   try {
@@ -293,14 +297,14 @@ exports.listCouponAssignByParams = async (req, res) => {
   }
 };
 
-
 exports.updateCouponAssign = async (req, res) => {
   try {
     const { influencer, coupon, numberOfCoupons, branch, isActive } = req.body;
 
     if (!influencer || !coupon || !numberOfCoupons || !branch) {
       return res.status(400).json({
-        message: "All fields (influencer, coupon, numberOfCoupons, branch) are required.",
+        message:
+          "All fields (influencer, coupon, numberOfCoupons, branch) are required.",
       });
     }
 
@@ -314,10 +318,15 @@ exports.updateCouponAssign = async (req, res) => {
     }
 
     const generateUniqueCouponCode = (influencerName, couponCode) => {
-      return `${influencerName.slice(0, 3).toUpperCase()}_${couponCode.slice(0, 3).toUpperCase()}_${Date.now().toString().slice(-4)}`;
+      return `${influencerName.slice(0, 3).toUpperCase()}_${couponCode
+        .slice(0, 3)
+        .toUpperCase()}_${Date.now().toString().slice(-4)}`;
     };
 
-    const uniqueCouponCode = generateUniqueCouponCode(influencerData.name, couponData.couponCode);
+    const uniqueCouponCode = generateUniqueCouponCode(
+      influencerData.name,
+      couponData.couponCode
+    );
 
     const uploadsFolder = path.join(__dirname, "../../uploads/CouponQR");
     if (!fs.existsSync(uploadsFolder)) {
@@ -326,14 +335,24 @@ exports.updateCouponAssign = async (req, res) => {
 
     const updatedCouponAssign = await CouponAssign.findOneAndUpdate(
       { _id: req.params._id },
-      { influencer, coupon, numberOfCoupons, branch, uniqueCouponCode, isActive },
+      {
+        influencer,
+        coupon,
+        numberOfCoupons,
+        branch,
+        uniqueCouponCode,
+        isActive,
+      },
       { new: true }
-    ).populate('influencer').populate('coupon').populate('branch').exec();
+    )
+      .populate("influencer")
+      .populate("coupon")
+      .populate("branch")
+      .exec();
 
     if (!updatedCouponAssign) {
       return res.status(404).json({ message: "Coupon Assign not found" });
     }
-
 
     const qrFileName = `${updatedCouponAssign._id}.png`;
     const qrFilePath = path.join(uploadsFolder, qrFileName);
@@ -355,7 +374,6 @@ exports.updateCouponAssign = async (req, res) => {
   }
 };
 
-
 exports.removeCouponAssign = async (req, res) => {
   try {
     const deletedCouponAssign = await CouponAssign.findOneAndRemove({
@@ -372,38 +390,51 @@ exports.removeCouponAssign = async (req, res) => {
   }
 };
 
-
 exports.redeemCoupon = async (req, res) => {
   try {
     const uniqueCouponCode = req.params._id;
-    console.log(req.params)
+    console.log(req.params);
     if (!uniqueCouponCode) {
-      return res.status(201).json({ message: "Unique coupon code is required." });
+      return res
+        .status(201)
+        .json({ message: "Unique coupon code is required." });
     }
 
     // Fetch the coupon assignment by uniqueCouponCode
-    const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: uniqueCouponCode })
-      .populate('influencer')
-      .populate('coupon')
-      .populate('branch')
+    const couponAssign = await CouponAssign.findOne({
+      uniqueCouponCode: uniqueCouponCode,
+    })
+      .populate("influencer")
+      .populate("coupon")
+      .populate("branch")
       .exec();
-    console.log(couponAssign)
+    console.log(couponAssign);
     if (!couponAssign) {
       return res.status(201).json({ message: "Coupon not found." });
     }
 
     if (!couponAssign.isActive) {
-      return res.status(201).json({ message: "Coupon is inactive and cannot be redeemed." });
+      return res
+        .status(201)
+        .json({ message: "Coupon is inactive and cannot be redeemed." });
     }
 
     const currentDate = new Date();
-    if (couponAssign.coupon && couponAssign.coupon.expiryDate && currentDate > new Date(couponAssign.coupon.expiryDate)) {
-      return res.status(201).json({ message: "Coupon has expired and cannot be redeemed." });
+    if (
+      couponAssign.coupon &&
+      couponAssign.coupon.expiryDate &&
+      currentDate > new Date(couponAssign.coupon.expiryDate)
+    ) {
+      return res
+        .status(201)
+        .json({ message: "Coupon has expired and cannot be redeemed." });
     }
 
-    const { branchId ,  redeemerName, redeemerPhone } = req.body;
+    const { branchId, redeemerName, redeemerPhone } = req.body;
     if (!branchId) {
-      return res.status(400).json({ message: "Branch ID is required for redemption." });
+      return res
+        .status(400)
+        .json({ message: "Branch ID is required for redemption." });
     }
 
     // Record the redemption in the redeemedHistory array
@@ -411,15 +442,14 @@ exports.redeemCoupon = async (req, res) => {
       branch: branchId,
       redeemedAt: new Date(),
       redeemerName,
-      redeemerPhone
+      redeemerPhone,
     });
-
-
-
 
     // Check if numberOfCoupons > 0
     if (couponAssign.numberOfCoupons <= 0) {
-      return res.status(201).json({ message: "Coupon already redeemed or no more uses left." });
+      return res
+        .status(201)
+        .json({ message: "Coupon already redeemed or no more uses left." });
     }
 
     couponAssign.numberOfCoupons -= 1;
@@ -435,7 +465,6 @@ exports.redeemCoupon = async (req, res) => {
     res.status(500).send({ error: "Internal Server Error." });
   }
 };
-
 
 // exports.redeemDirectCoupon = async (req, res) => {
 //   try {
@@ -455,7 +484,7 @@ exports.redeemCoupon = async (req, res) => {
 //     if (coupon.expiryDate && currentDate > new Date(coupon.expiryDate)) {
 //       return res.status(400).json({ isOk: false, message: "Coupon has expired." });
 //     }
-    
+
 //     // Record redemption details
 //     coupon.redeemedHistory = coupon.redeemedHistory || [];
 //     coupon.redeemedHistory.push({
@@ -465,7 +494,7 @@ exports.redeemCoupon = async (req, res) => {
 //       redeemedAt: new Date(),
 //     });
 //     await coupon.save();
-    
+
 //     return res.status(200).json({
 //       isOk: true,
 //       message: "Coupon redeemed successfully.",
@@ -482,13 +511,6 @@ exports.redeemCoupon = async (req, res) => {
 //   }
 // };
 
-
-
-
-
-
-
-
 exports.applyCouponPending = async (req, res) => {
   try {
     // Allow coupon code to be passed via URL param or request body.
@@ -496,15 +518,19 @@ exports.applyCouponPending = async (req, res) => {
     if (!couponCode) {
       return res.status(400).json({ message: "Coupon code is required." });
     }
-    
+
     // Try to find a coupon assignment with this coupon code.
-    let couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode.trim() })
+    let couponAssign = await CouponAssign.findOne({
+      uniqueCouponCode: couponCode.trim(),
+    })
       .populate("coupon")
       .exec();
 
     // If not found in CouponAssign, try to find the coupon in CouponMaster.
     if (!couponAssign) {
-      const couponMaster = await CouponMaster.findOne({ couponCode: couponCode.trim() });
+      const couponMaster = await CouponMaster.findOne({
+        couponCode: couponCode.trim(),
+      });
       if (!couponMaster) {
         return res.status(404).json({ message: "Coupon not found." });
       }
@@ -515,17 +541,19 @@ exports.applyCouponPending = async (req, res) => {
         numberOfCoupons: 1, // or a default value as per your business rules.
         uniqueCouponCode: couponCode.trim(),
         isActive: couponMaster.isActive,
-        nonInfluencer: true,  // Mark this coupon as for direct redemption.
+        nonInfluencer: true, // Mark this coupon as for direct redemption.
       });
       couponAssign = await couponAssign.save();
       // Re-populate the coupon field.
-      couponAssign = await CouponAssign.findById(couponAssign._id).populate("coupon").exec();
+      couponAssign = await CouponAssign.findById(couponAssign._id)
+        .populate("coupon")
+        .exec();
     }
-    
+
     if (!couponAssign.isActive) {
       return res.status(400).json({ message: "Coupon is inactive." });
     }
-    
+
     const currentDate = new Date();
     if (
       couponAssign.coupon &&
@@ -534,12 +562,14 @@ exports.applyCouponPending = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Coupon has expired." });
     }
-    
+
     const { branchId, redeemerName, redeemerPhone } = req.body;
     if (!branchId) {
-      return res.status(400).json({ message: "Branch ID is required for redemption." });
+      return res
+        .status(400)
+        .json({ message: "Branch ID is required for redemption." });
     }
-    
+
     // Set pending redemption details without decrementing the count.
     couponAssign.pendingRedemption = true;
     couponAssign.pendingRedeemedHistory = {
@@ -548,7 +578,7 @@ exports.applyCouponPending = async (req, res) => {
       redeemerName,
       redeemerPhone,
     };
-    
+
     await couponAssign.save();
     return res.status(200).json({
       isOk: true,
@@ -561,13 +591,6 @@ exports.applyCouponPending = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
 // controllers/CouponAssignController.js
 //   const PDFDocument = require('pdfkit');
 // const fs = require('fs');
@@ -579,8 +602,6 @@ exports.applyCouponPending = async (req, res) => {
 //       .populate('coupon')
 //       .populate('qrCodeUrl')
 //       .exec();sj
-
-
 
 exports.downloadCouponPDF = async (req, res) => {
   try {
@@ -595,17 +616,18 @@ exports.downloadCouponPDF = async (req, res) => {
     if (!couponAssign) {
       return res.status(404).json({ message: "Coupon assignment not found." });
     }
-    console.log(couponAssign)
+    console.log(couponAssign);
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Useful for certain hosting environments
+      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Useful for certain hosting environments
     });
     const page = await browser.newPage();
 
-
     const qrCodePath = path.join(__basedir, couponAssign.qrCodeUrl);
     const qrCodeBase64 = fs.existsSync(qrCodePath)
-      ? `data:image/png;base64,${fs.readFileSync(qrCodePath).toString("base64")}`
+      ? `data:image/png;base64,${fs
+          .readFileSync(qrCodePath)
+          .toString("base64")}`
       : "";
 
     // **Generate HTML content from your style**
@@ -755,7 +777,9 @@ exports.downloadCouponPDF = async (req, res) => {
       <div class="left">
         <div class="text-center">
           Enjoy Your Gift From <br />
-          <a href="https://instagram.com/${couponAssign.influencer.instagram}" target="_blank" rel="noopener noreferrer">
+          <a href="https://instagram.com/${
+            couponAssign.influencer.instagram
+          }" target="_blank" rel="noopener noreferrer">
             @${couponAssign.influencer.instagram}
           </a>
         </div>
@@ -763,12 +787,19 @@ exports.downloadCouponPDF = async (req, res) => {
       <div class="center">
         <div class="p-2">
           <div class="coupon-image">
-            <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
-            <img src="${process.env.REACT_APP_SERVER}/${couponAssign.qrCodeUrl}" width="64.5" class="logo mb-2" alt="QR Code" />
+            <img src="${
+              couponAssign.influencer.logoUrl ||
+              "https://www.piztaalian.com/assets/img/logo.png"
+            }" width="60" class="logo mb-2" alt="Company Logo" />
+            <img src="${process.env.REACT_APP_SERVER}/${
+      couponAssign.qrCodeUrl
+    }" width="64.5" class="logo mb-2" alt="QR Code" />
           </div>
           <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
           <p>${couponAssign.coupon.couponDescription}</p>
-          <small>Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}</small>
+          <small>Valid Till: ${new Date(
+            couponAssign.coupon.expiryDate
+          ).toLocaleDateString()}</small>
         </div>
       </div>
       <div class="right">
@@ -799,8 +830,8 @@ exports.downloadCouponPDF = async (req, res) => {
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
     const uploaddir = `${__basedir}/uploads`;
-    const filename = "piztaalian.pdf"
-    const filePath = path.join(uploaddir, filename)
+    const filename = "piztaalian.pdf";
+    const filePath = path.join(uploaddir, filename);
     if (!fs.existsSync(uploaddir)) {
       fs.mkdirSync(uploaddir, { recursive: true });
     }
@@ -822,35 +853,36 @@ exports.downloadCouponPDF = async (req, res) => {
     // res.send(pdfBuffer);
     const fileUrl = `${process.env.REACT_APP_SERVER}/uploads/${filename}`;
 
-    return res.status(200).json({ filename, isOk: true, fileUrl })
+    return res.status(200).json({ filename, isOk: true, fileUrl });
   } catch (err) {
     console.error(err);
     res.status(500).send({ error: "Failed to generate PDF." });
   }
 };
 
-
-
-
-
 exports.downloadAllCouponsPDF = async (req, res) => {
   try {
     // Fetch all active CouponAssign documents
-    const couponAssigns = await CouponAssign.find({ isActive: true, nonInfluencer: { $ne: true } })
-    .populate("influencer")
+    const couponAssigns = await CouponAssign.find({
+      isActive: true,
+      nonInfluencer: { $ne: true },
+    })
+      .populate("influencer")
       .populate("influencer")
       .populate("coupon")
       .populate("branch")
       .exec();
 
     if (!couponAssigns.length) {
-      return res.status(404).json({ message: "No active coupon assignments found." });
+      return res
+        .status(404)
+        .json({ message: "No active coupon assignments found." });
     }
 
     // Launch Puppeteer
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
 
@@ -1018,7 +1050,9 @@ exports.downloadAllCouponsPDF = async (req, res) => {
             <div class="left">
               <div class="text-center">
                 Enjoy Your Gift From <br />
-                <a href="https://instagram.com/${couponAssign.influencer.instagram}" target="_blank" rel="noopener noreferrer">
+                <a href="https://instagram.com/${
+                  couponAssign.influencer.instagram
+                }" target="_blank" rel="noopener noreferrer">
                   @${couponAssign.influencer.instagram}
                 </a>
               </div>
@@ -1026,12 +1060,17 @@ exports.downloadAllCouponsPDF = async (req, res) => {
             <div class="center">
               <div class="p-2">
                 <div class="coupon-image">
-                  <img src="${couponAssign.influencer.logoUrl || 'https://www.piztaalian.com/assets/img/logo.png'}" width="60" class="logo mb-2" alt="Company Logo" />
+                  <img src="${
+                    couponAssign.influencer.logoUrl ||
+                    "https://www.piztaalian.com/assets/img/logo.png"
+                  }" width="60" class="logo mb-2" alt="Company Logo" />
                   <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
                 </div>
                 <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
                 <p>${couponAssign.coupon.couponDescription}</p>
-                <small>Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}</small>
+                <small>Valid Till: ${new Date(
+                  couponAssign.coupon.expiryDate
+                ).toLocaleDateString()}</small>
               </div>
             </div>
             <div class="right">
@@ -1066,7 +1105,7 @@ exports.downloadAllCouponsPDF = async (req, res) => {
     // Set the content and generate PDF
     await page.setContent(combinedHtml, { waitUntil: "networkidle0" });
 
-    const uploaddir = path.join(__basedir, 'uploads');
+    const uploaddir = path.join(__basedir, "uploads");
     const filename = `all_coupons.pdf`;
     const filePath = path.join(uploaddir, filename);
 
@@ -1089,17 +1128,6 @@ exports.downloadAllCouponsPDF = async (req, res) => {
     res.status(500).send({ error: "Failed to generate PDF." });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
 
 // exports.branchLogin = async (req, res) => {
 //   const { email, password } = req.body;
@@ -1174,14 +1202,16 @@ exports.sendCouponPDF = async (req, res) => {
     // 2. Launch Puppeteer and generate the PDF (same as downloadCouponPDF)
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
 
     // Prepare the QR code if present
     const qrCodePath = path.join(__basedir, couponAssign.qrCodeUrl);
     const qrCodeBase64 = fs.existsSync(qrCodePath)
-      ? `data:image/png;base64,${fs.readFileSync(qrCodePath).toString("base64")}`
+      ? `data:image/png;base64,${fs
+          .readFileSync(qrCodePath)
+          .toString("base64")}`
       : "";
 
     // Create the HTML content (same styling as in downloadCouponPDF)
@@ -1328,15 +1358,18 @@ exports.sendCouponPDF = async (req, res) => {
       <div class="center">
         <div class="p-2">
           <div class="coupon-image">
-            <img src="${couponAssign.influencer.logoUrl ||
-      "https://www.piztaalian.com/assets/img/logo.png"
-      }" width="60" class="logo mb-2" alt="Company Logo" />
+            <img src="${
+              couponAssign.influencer.logoUrl ||
+              "https://www.piztaalian.com/assets/img/logo.png"
+            }" width="60" class="logo mb-2" alt="Company Logo" />
             <img src="${qrCodeBase64}" width="64.5" class="logo mb-2" alt="QR Code" />
           </div>
           <h2>${couponAssign.coupon.discountPercentage}% OFF</h2>
           <p>${couponAssign.coupon.couponDescription}</p>
           <small>
-            Valid Till: ${new Date(couponAssign.coupon.expiryDate).toLocaleDateString()}
+            Valid Till: ${new Date(
+              couponAssign.coupon.expiryDate
+            ).toLocaleDateString()}
           </small>
         </div>
       </div>
@@ -1380,8 +1413,8 @@ exports.sendCouponPDF = async (req, res) => {
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+      },
     });
 
     let mailOptions = {
@@ -1403,7 +1436,8 @@ exports.sendCouponPDF = async (req, res) => {
     // 7. Return success
     return res.status(200).json({
       isOk: true,
-      message: "Latest PDF generated & emailed successfully (no need to download first).",
+      message:
+        "Latest PDF generated & emailed successfully (no need to download first).",
     });
   } catch (error) {
     console.error("Error in sendCouponPDF:", error);
@@ -1447,8 +1481,8 @@ exports.influencerDashboard = async (req, res) => {
           branchId: record.branch?._id,
           branchName: record.branch ? record.branch.branchName : "Unknown",
           redeemedAt: record.redeemedAt,
-          redeemerName: record.redeemerName,       // Include redeemer's name
-          redeemerPhone: record.redeemerPhone,     // Include redeemer's phone
+          redeemerName: record.redeemerName, // Include redeemer's name
+          redeemerPhone: record.redeemerPhone, // Include redeemer's phone
         })),
       };
     });
@@ -1467,16 +1501,15 @@ exports.influencerDashboard = async (req, res) => {
   }
 };
 
-
 exports.exportCouponRedeemDetails = async (req, res) => {
   try {
-   
     const couponAssignId = req.params._id;
     if (!couponAssignId) {
-      return res.status(400).json({ message: "Coupon assignment ID is required." });
+      return res
+        .status(400)
+        .json({ message: "Coupon assignment ID is required." });
     }
 
-    
     const couponAssign = await CouponAssign.findById(couponAssignId)
       .populate("coupon")
       .populate("branch")
@@ -1490,22 +1523,21 @@ exports.exportCouponRedeemDetails = async (req, res) => {
       return res.status(404).json({ message: "Coupon assignment not found." });
     }
 
-    
     const rows = couponAssign.redeemedHistory.map((record, index) => ({
       "Sr No": index + 1,
       "Coupon Code": couponAssign.coupon.couponCode,
-      "Branch": record.branch ? record.branch.branchName : "Unknown",
-      "Redeemed At": record.redeemedAt ? record.redeemedAt.toLocaleString() : "",
+      Branch: record.branch ? record.branch.branchName : "Unknown",
+      "Redeemed At": record.redeemedAt
+        ? record.redeemedAt.toLocaleString()
+        : "",
       "Redeemer Name": record.redeemerName || "",
       "Redeemer Phone": record.redeemerPhone || "",
     }));
 
-    
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, "Redeem Details");
 
-   
     const uploadsFolder = path.join(__basedir, "uploads");
     if (!fs.existsSync(uploadsFolder)) {
       fs.mkdirSync(uploadsFolder, { recursive: true });
@@ -1513,10 +1545,8 @@ exports.exportCouponRedeemDetails = async (req, res) => {
     const filename = "redeem-details.xlsx";
     const filePath = path.join(uploadsFolder, filename);
 
-    
     XLSX.writeFile(wb, filePath);
 
-    
     const fileUrl = `${process.env.REACT_APP_SERVER}/uploads/${filename}`;
 
     return res.status(200).json({ filename, isOk: true, fileUrl });

@@ -14,6 +14,7 @@ const {
   updateOrderStatus,
   listUserOrders,
   getInvoice,
+  downloadInvoice
 } = require("../controllers/Order/Order");
 
 router.post(
@@ -61,6 +62,11 @@ router.get(
   "/auth/order/user/:userId",
   authMiddleware(["ADMIN", "BRANCH", "USER"]),
   catchAsync(listUserOrders)
+);
+
+router.get(
+  "/auth/order/downloadInvoice/:id", 
+  catchAsync(downloadInvoice)
 );
 
 module.exports = router;
