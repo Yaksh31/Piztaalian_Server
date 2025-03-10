@@ -6,6 +6,10 @@ const CouponAssign = require("../../models/CouponMaster/CouponAssign");
 const MenuMaster = require("../../models/MenuMaster/MenuMaster");
 const UserMaster = require("../../models/UserMaster/UserMaster");
 const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
+const puppeteer = require("puppeteer");
 
 // exports.getOrder = async (req, res) => {
 //   try {
@@ -220,6 +224,7 @@ exports.getInvoice = async (req, res) => {
           "userDetails.cart",
           "userDetails.otp",
           "userDetails.otpExpiresAt",
+          "branchDetails.password",
         ],
       },
     ];
@@ -227,9 +232,7 @@ exports.getInvoice = async (req, res) => {
     const [invoiceData] = await Order.aggregate(pipeline);
 
     if (!invoiceData) {
-      return res
-        .status(404)
-        .json({ isOk: false, message: "Order not found" });
+      return res.status(404).json({ isOk: false, message: "Order not found" });
     }
 
     return res.status(200).json({
@@ -241,8 +244,6 @@ exports.getInvoice = async (req, res) => {
     res.status(500).json({ isOk: false, message: error.message });
   }
 };
-
-
 
 exports.getOrder = async (req, res) => {
   try {
@@ -315,7 +316,7 @@ exports.getOrder = async (req, res) => {
                 _id: 0,
                 itemName: "$menuItem.itemName",
                 description: "$menuItem.description",
-                foodImage: "$menuItem.foodImage"
+                foodImage: "$menuItem.foodImage",
               },
             },
           ],
@@ -638,8 +639,6 @@ exports.createOrder = async (req, res) => {
       };
       await transporter.sendMail(mailOptions);
     }
-
-
 
     return res.status(201).json({
       isOk: true,
@@ -1305,5 +1304,486 @@ exports.listUserOrders = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.downloadInvoice = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    if (!orderId) {
+      return res.status(400).json({
+        isOk: false,
+        message: "Order ID is required for invoice download",
+      });
+    }
+
+    // 1) Fetch invoice data using the same pipeline as getInvoice
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(orderId) } },
+      {
+        $lookup: {
+          from: "usermasters",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "branches",
+          localField: "branch",
+          foreignField: "_id",
+          as: "branchDetails",
+        },
+      },
+      { $unwind: { path: "$branchDetails", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            {
+              $match: {
+                $expr: { $eq: ["$menuItem._id", "$$menuId"] },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                itemName: "$menuItem.itemName",
+                description: "$menuItem.description",
+              },
+            },
+          ],
+          as: "cart.menuItemDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            {
+              $match: {
+                $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price",
+              },
+            },
+          ],
+          as: "cart.variantDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails",
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          orderId: { $first: "$orderId" },
+          userDetails: { $first: "$userDetails" },
+          branchDetails: { $first: "$branchDetails" },
+          cart: { $push: "$cart" },
+          orderStatus: { $first: "$orderStatus" },
+          couponCode: { $first: "$couponCode" },
+          discountPrice: { $first: "$discountPrice" },
+          subTotal: { $first: "$subTotal" },
+          effectiveSubtotal: { $first: "$effectiveSubtotal" },
+          cgst: { $first: "$cgst" },
+          sgst: { $first: "$sgst" },
+          totalTax: { $first: "$totalTax" },
+          grandTotal: { $first: "$grandTotal" },
+          completionDateTime: { $first: "$completionDateTime" },
+          remark: { $first: "$remark" },
+          createdAt: { $first: "$createdAt" },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          orderId: 1,
+          orderStatus: 1,
+          couponCode: 1,
+          discountPrice: 1,
+          subTotal: 1,
+          effectiveSubtotal: 1,
+          cgst: 1,
+          sgst: 1,
+          totalTax: 1,
+          grandTotal: 1,
+          completionDateTime: 1,
+          remark: 1,
+          createdAt: 1,
+          userDetails: 1,
+          branchDetails: 1,
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                totalPrice: "$$item.totalPrice",
+                menuItem: "$$item.menuItemDetails.itemName",
+                description: "$$item.menuItemDetails.description",
+                variant: {
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice",
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $unset: [
+          "userDetails.password",
+          "userDetails.cart",
+          "userDetails.otp",
+          "userDetails.otpExpiresAt",
+        ],
+      },
+    ];
+
+    const [invoiceData] = await Order.aggregate(pipeline);
+    if (!invoiceData) {
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Invoice not found" });
+    }
+
+    // 2) Build an HTML string that matches your front-end design
+    // ----------------------------------------------------------------
+    // For simplicity, we inline the CSS and replicate the layout from
+    // your second screenshot. Adjust styles to your preference.
+    // ----------------------------------------------------------------
+    // ADDED CODE: Modified formatNumber to check for NaN values.
+    const formatNumber = (value) => {
+      const num = Number(value);
+      return isNaN(num) ? "0.00" : num.toFixed(2);
+    };
+    const formatDate = (date) => new Date(date).toLocaleDateString("en-GB"); // dd/mm/yyyy
+    const formatDateTime = (date) => new Date(date).toLocaleString("en-GB"); // dd/mm/yyyy, HH:MM:SS
+
+    // Build Toppings HTML for each cart item
+    const buildToppings = (toppings) => {
+      if (!toppings || toppings.length === 0) return "-";
+      return toppings
+        .map((t) => `${t.toppingName} (₹${formatNumber(t.toppingPrice)})`)
+        .join(", ");
+    };
+
+    // Build Items Table Rows
+    const itemsHTML = invoiceData.cart
+      .map((item) => {
+        return `
+          <tr>
+            <td>${item.menuItem}</td>
+            <td>${item.variant?.name || "Standard Variant"}</td>
+            <td>${buildToppings(item.toppings)}</td>
+            <td>${item.quantity}</td>
+            <td>₹${formatNumber(item.totalPrice)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    // ADDED CODE: Added logo image in header (use a valid public URL or Base64 string)
+    const logoHTML = `<img src="https://www.piztaalian.com/assets/img/logo.png" alt="Logo" style="height:50px;" />`;
+
+    // Build the HTML content
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Invoice</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background-color: #f8f9fa;
+    }
+    .invoice-container {
+      background: #fff;
+      max-width: 800px;
+      margin: 30px auto;
+      padding: 20px 30px;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+    }
+    h1, h3, h5 {
+      margin: 0;
+      font-weight: 600;
+    }
+    hr {
+      margin: 1rem 0;
+      border: none;
+      border-top: 1px solid #dee2e6;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .col-half {
+      flex: 0 0 50%;
+      max-width: 50%;
+      box-sizing: border-box;
+    }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-3 { margin-bottom: 1rem; }
+    .table {
+      width: 100%;
+      margin-bottom: 1rem;
+      border-collapse: collapse;
+    }
+    .table th, .table td {
+      padding: 0.75rem;
+      border: 1px solid #dee2e6;
+    }
+    .table thead th {
+      background-color: #e9ecef;
+    }
+    .totals {
+      width: 100%;
+      max-width: 300px;
+      margin-left: auto;
+    }
+    .totals div {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.3rem;
+    }
+    .totals .total-label {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <!-- Header -->
+    <div style="display:flex; justify-content: space-between; align-items:center;">
+      <div>
+        <h3 class="mb-0">Invoice</h3>
+      </div>
+      ${logoHTML}
+    </div>
+    <hr />
+
+    <!-- Order & Customer Details -->
+    <div class="row">
+      <div class="col-half">
+        <h5>Order Details</h5>
+        <p class="mb-1"><strong>Order ID:</strong> ${invoiceData.orderId}</p>
+        <p class="mb-1"><strong>Order Date:</strong> ${formatDate(
+          invoiceData.createdAt
+        )}</p>
+        ${
+          invoiceData.completionDateTime
+            ? `<p class="mb-1"><strong>Completion Date:</strong> ${formatDateTime(
+                invoiceData.completionDateTime
+              )}</p>`
+            : ""
+        }
+        ${
+          invoiceData.couponCode
+            ? `<p class="mb-1"><strong>Coupon Code:</strong> ${invoiceData.couponCode}</p>`
+            : ""
+        }
+      </div>
+      <div class="col-half">
+        <h5>Customer Info</h5>
+        ${
+          invoiceData.userDetails
+            ? `
+          <p class="mb-1"><strong>Name:</strong> ${
+            invoiceData.userDetails.firstName
+          } ${invoiceData.userDetails.lastName}</p>
+          ${
+            invoiceData.userDetails.phone
+              ? `<p class="mb-1"><strong>Phone:</strong> ${invoiceData.userDetails.phone}</p>`
+              : ""
+          }
+          <p class="mb-1"><strong>Email:</strong> ${
+            invoiceData.userDetails.email
+          }</p>
+          <p class="mb-1"><strong>Branch:</strong> ${
+            invoiceData.branchDetails.branchName
+          }</p>
+        `
+            : ""
+        }
+      </div>
+    </div>
+    <hr />
+
+    <!-- Items Table -->
+    <h5 class="mb-3">Items</h5>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Variant</th>
+          <th>Toppings</th>
+          <th>Quantity</th>
+          <th>Total Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHTML}
+      </tbody>
+    </table>
+
+    <!-- Order Remark -->
+    <h5 class="mb-3">Order Remark</h5>
+    <div style="border:1px solid #dee2e6; border-radius:4px; padding:10px;">
+      <p class="mb-0">${invoiceData.remark ? invoiceData.remark : "N/A"}</p>
+    </div>
+
+    <!-- Totals -->
+    <hr />
+    <div class="totals">
+      <div>
+        <span>Subtotal:</span>
+        <span>₹${formatNumber(invoiceData.subTotal)}</span>
+      </div>
+      ${
+        invoiceData.couponCode
+          ? `<div><span>Coupon Code:</span><span>${invoiceData.couponCode}</span></div>`
+          : ""
+      }
+      ${
+        invoiceData.discountPrice > 0
+          ? `<div><span>Discount:</span><span>- ₹${formatNumber(
+              invoiceData.discountPrice
+            )}</span></div>`
+          : ""
+      }
+      <div>
+        <span>Effective Subtotal:</span>
+        <span>₹${formatNumber(invoiceData.effectiveSubtotal)}</span>
+      </div>
+      ${
+        invoiceData.sgst !== undefined
+          ? `<div><span>SGST:</span><span>₹${formatNumber(
+              invoiceData.sgst
+            )}</span></div>`
+          : ""
+      }
+      ${
+        invoiceData.cgst !== undefined
+          ? `<div><span>CGST:</span><span>₹${formatNumber(
+              invoiceData.cgst
+            )}</span></div>`
+          : ""
+      }
+      ${
+        invoiceData.totalTax !== undefined
+          ? `<div><span>Total Tax:</span><span>₹${formatNumber(
+              invoiceData.totalTax
+            )}</span></div>`
+          : ""
+      }
+      <div class="total-label">
+        <span>Grand Total:</span>
+        <span>₹${formatNumber(invoiceData.grandTotal)}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    // 3) Launch Puppeteer to render the HTML and generate PDF
+    const browser = await puppeteer.launch({
+      headless: true, // Set to false for debugging
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+
+    // 4) Set HTML content
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+
+    // 5) Generate PDF
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true, // ensures background colors render
+    });
+
+    // 6) Close Puppeteer
+    await browser.close();
+
+     // 7) Optionally store PDF in uploads folder
+     const uploaddir = `${__basedir}/uploads`;
+     if (!fs.existsSync(uploaddir)) {
+       fs.mkdirSync(uploaddir, { recursive: true });
+     }
+     // CHANGED CODE: Use a fixed filename so the old file is replaced
+     const filename = `invoice.pdf`;
+     const filePath = path.join(uploaddir, filename);
+     if (fs.existsSync(filePath)) {
+       fs.unlinkSync(filePath);
+     }
+     fs.writeFileSync(filePath, pdfBuffer);
+     // CHANGED CODE: Read back the stored file and set Content-Length header
+     const storedPDF = fs.readFileSync(filePath);
+
+    // 8) Send PDF back to client
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", storedPDF.length);
+    return res.send(storedPDF);
+  } catch (err) {
+    console.error("Error downloading invoice:", err);
+    res.status(500).json({ isOk: false, message: err.message });
   }
 };
