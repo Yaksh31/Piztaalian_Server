@@ -29,7 +29,8 @@ exports.getOrder = async (req, res) => {
 
     const pipeline = [
       // MATCH stage: Filter by the provided order ID
-      { $match: { _id: new mongoose.Types.ObjectId(orderId) } },
+      // { $match: { _id: new mongoose.Types.ObjectId(orderId) } },
+      { $match: { orderId: orderId } },
 
       // LOOKUP: Get user details from "usermasters"
       {
@@ -88,6 +89,7 @@ exports.getOrder = async (req, res) => {
                 _id: 0,
                 itemName: "$menuItem.itemName",
                 description: "$menuItem.description",
+                foodImage: "$menuItem.foodImage"
               },
             },
           ],
@@ -146,6 +148,7 @@ exports.getOrder = async (req, res) => {
       {
         $group: {
           _id: "$_id",
+          orderId: { $first: "$orderId" },
           orderStatus: { $first: "$orderStatus" },
           couponCode: { $first: "$couponCode" },
           discountPrice: { $first: "$discountPrice" },
@@ -168,6 +171,7 @@ exports.getOrder = async (req, res) => {
       {
         $project: {
           orderStatus: 1,
+          orderId: 1,
           couponCode: 1,
           discountPrice: 1,
           subTotal: 1,
@@ -195,6 +199,7 @@ exports.getOrder = async (req, res) => {
                 // CHANGE: Using the populated menuItem name field
                 menuItem: "$$item.menuItemDetails.itemName",
                 description: "$$item.menuItemDetails.description",
+                foodImage: "$$item.menuItemDetails.foodImage",
                 variant: {
                   name: "$$item.variantDetails.variantName",
                   price: "$$item.variantDetails.variantPrice",
@@ -515,7 +520,7 @@ exports.listOrderByParams = async (req, res) => {
         let: { userId: "$userId" },
         pipeline: [
           { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-          { $project: { password: 0, otp: 0, otpExpiresAt: 0 } }
+          { $project: { password: 0, otp: 0, otpExpiresAt: 0 } },
         ],
         as: "userDetails",
       },
@@ -663,13 +668,15 @@ exports.listOrderByParams = async (req, res) => {
       },
     });
 
-
-
     query = query.concat([
       {
         $facet: {
           metadata: [{ $count: "total" }],
-          data: [{ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: per_page }],
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: per_page },
+          ],
         },
       },
       { $unwind: "$metadata" },
@@ -962,6 +969,7 @@ exports.listUserOrders = async (req, res) => {
       {
         $group: {
           _id: "$_id",
+          orderId: { $first: "$orderId" },
           orderStatus: { $first: "$orderStatus" },
           couponCode: { $first: "$couponCode" },
           discountPrice: { $first: "$discountPrice" },
@@ -983,6 +991,7 @@ exports.listUserOrders = async (req, res) => {
       // Project the desired fields and transform the cart array
       {
         $project: {
+          orderId: 1,
           orderStatus: 1,
           couponCode: 1,
           discountPrice: 1,
@@ -1040,7 +1049,6 @@ exports.listUserOrders = async (req, res) => {
     // eventEmitter.emit('orderStatusUpdated', updatedOrder);
     // eventEmitter.emit('ordersUpdateTrigger');
     // res.json({ isOk: true, data: updatedOrder, message: "Order status updated successfully" });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ isOk: false, message: error.message });
