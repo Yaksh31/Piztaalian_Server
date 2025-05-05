@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const catchAsync = require("../utils/catchAsync");
+const { authMiddleware } = require("../middlewares/auth");
 
 const multer = require("multer");
 const storage = multer.diskStorage({
@@ -29,21 +30,21 @@ const {
   
 } = require("../controllers/CouponMaster/uploads/InfluencerMaster");
 
-router.post("/auth/create/Influencer", catchAsync(createInfluencer));
+router.post("/auth/create/Influencer", authMiddleware(["ADMIN"]) ,catchAsync(createInfluencer));
 
-router.get("/auth/list/Influencer", catchAsync(listInfluencer));
+router.get("/auth/list/Influencer", authMiddleware(["ADMIN"]), catchAsync(listInfluencer));
 
-router.post("/auth/listByparams/Influencer", catchAsync(listInfluencerByParams));
+router.post("/auth/listByparams/Influencer", authMiddleware(["ADMIN"]), catchAsync(listInfluencerByParams));
 
-router.get("/auth/get/Influencer/:_id", catchAsync(getInfluencer));
+router.get("/auth/get/Influencer/:_id", authMiddleware(["ADMIN","INFLUENCER"]), catchAsync(getInfluencer));
 
-router.put("/auth/update/Influencer/:id", catchAsync(updateInfluencer));
+router.put("/auth/update/Influencer/:id", authMiddleware(["ADMIN","INFLUENCER"]), catchAsync(updateInfluencer));
 
-router.delete("/auth/remove/Influencer/:_id", catchAsync(removeInfluencer));
+router.delete("/auth/remove/Influencer/:_id", authMiddleware(["ADMIN"]), catchAsync(removeInfluencer));
 
 router.post(
     "/auth/CouponMaster/uploadExcel",
-    upload.single("excelFile"),
+    upload.single("excelFile"), authMiddleware(["ADMIN"]),
     catchAsync(uploadExcel)
   );
 router.post("/influencer/login", catchAsync(influencerLogin))

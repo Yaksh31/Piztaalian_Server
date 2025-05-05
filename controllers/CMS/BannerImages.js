@@ -1,5 +1,7 @@
 const BannerImages = require("../../models/CMS/BannerImages");
 const fs = require("fs");
+const path = require("path");
+const sharp = require("sharp");
 
 exports.listBannerImages = async (req, res) => {
   try {
@@ -13,13 +15,18 @@ exports.listBannerImages = async (req, res) => {
 
 exports.createBannerImages = async (req, res) => {
   try {
-    if (!fs.existsSync(`${__basedir}/uploads/BannerImg`)) {
-      fs.mkdirSync(`${__basedir}/uploads/BannerImg`);
+    const uploadDir = `${__basedir}/uploads/BannerImg`;
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
 
+    // let bannerImage = req.file
+    //   ? await compressImage(req.file, uploadDir)
+    //   : null;
+
     let bannerImage = req.file
-      ? `uploads/BannerImg/${req.file.filename}`
-      : null;
+    ? `uploads/BannerImg/${req.file.filename}`
+    : null;
 
     let { Title, keyWord, Description, IsActive } = req.body;
 
@@ -144,9 +151,18 @@ exports.getBannerImages = async (req, res) => {
 
 exports.updateBannerImages = async (req, res) => {
   try {
+    const uploadDir = `${__basedir}/uploads/BannerImg`;
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // let bannerImage = req.file
+    //   ?  await compressImage(req.file, uploadDir)
+    //   : null;
+
     let bannerImage = req.file
-      ? `uploads/BannerImg/${req.file.filename}`
-      : null;
+    ? `uploads/BannerImg/${req.file.filename}`
+    : null;
     let fieldvalues = { ...req.body };
     if (bannerImage != null) {
       fieldvalues.bannerImage = bannerImage;
@@ -162,3 +178,37 @@ exports.updateBannerImages = async (req, res) => {
     res.status(500).send(err);
   }
 };
+
+
+async function compressImage(file, uploadDir) {
+  const filePath = path.join(uploadDir, file.filename);
+  const compressedPath = path.join(uploadDir, `compressed-${file.filename}`);
+
+  try {
+    let quality = 80;
+    let compressed = false;
+
+    do {
+      await sharp(file.path)
+        .jpeg({ quality }) // Adjust the quality to reduce the size
+        .toFile(compressedPath);
+
+      const { size } = fs.statSync(compressedPath);
+      if (size <= 100 * 1024 || quality <= 20) {
+        // Check if size is under 100 KB or quality is too low
+        compressed = true;
+      } else {
+        quality -= 10; // Reduce quality further if size is still too large
+      }
+    } while (!compressed);
+
+    // Replace the original image with the compressed one
+    fs.unlinkSync(filePath);
+    fs.renameSync(compressedPath, filePath);
+
+    return `uploads/BannerImg/${file.filename}`;
+  } catch (error) {
+    console.log("Error compressing image:", error);
+    return null;
+  }
+}

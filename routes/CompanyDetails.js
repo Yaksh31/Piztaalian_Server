@@ -1,6 +1,8 @@
 const express = require("express");
 const multer = require("multer");
 
+const { authMiddleware } = require("../middlewares/auth");
+
 const router = express.Router();
 
 const {
@@ -25,16 +27,16 @@ const upload = multer({ storage: multerStorage });
 
 router.get("/auth/list/companyDetails", catchAsync(listCompanyDetails));
 router.post(
-  "/auth/upload/companyDetails",
+  "/auth/upload/companyDetails",authMiddleware(["ADMIN"]),
   upload.single("file"),
   catchAsync(uplodaImages)
 );
 router.post(
-  "/auth/create/companyDetails",
+  "/auth/create/companyDetails",authMiddleware(["ADMIN"]),
   catchAsync(createCompanyDetails)
 );
 router.put(
-  "/auth/update/companyDetails/:_id",
+  "/auth/update/companyDetails/:_id",authMiddleware(["ADMIN"]),
   catchAsync(updateDetails)
 );
 router.get(

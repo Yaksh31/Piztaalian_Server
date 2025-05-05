@@ -1,12 +1,18 @@
-// 1. Import required modules
-const UserMaster = require("../../models/UserMaster/UserMaster");
 const User = require("../../models/UserMaster/UserMaster");
 const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
+const MenuMaster = require("../../models/MenuMaster/MenuMaster");
+const ToppingMaster = require("../../models/Topping/ToppingMaster");
+const CouponAssign = require("../../models/CouponMaster/CouponAssign");
+const { generateAccessToken } = require('../../middlewares/auth');
 
-// 2. GET a single user
+
+const nodemailer = require("nodemailer");
+
 exports.getUserMaster = async (req, res) => {
   try {
     const user = await User.findById(req.params._id).exec();
+    
     if (!user) {
       return res.status(404).json({ isOk: false, message: "User not found" });
     }
@@ -16,11 +22,34 @@ exports.getUserMaster = async (req, res) => {
   }
 };
 
-// 3. CREATE a new user
+exports.getUserProfile = async (req, res) => {
+  try {
+    // Use req.params.id instead of req.params._id for a different route parameter name
+    const user = await User.findById(req.params._id)
+    .select("-password -otp -otpExpiresAt")
+      .exec();
+      
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User profile not found" });
+    }
+    res.json({ isOk: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
 exports.createUserMaster = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, isActive, addresses } =
-      req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
+      isActive,
+      addresses,
+      cart,
+    } = req.body;
     console.log(">>>>>", req.body);
 
     if (!firstName || !lastName || !email || !password) {
@@ -30,26 +59,26 @@ exports.createUserMaster = async (req, res) => {
     }
 
     // Address validation
-    if (!addresses || addresses.length === 0) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "At least one address is required" });
-    }
+    // if (!addresses || addresses.length === 0) {
+    //   return res
+    //     .status(400)
+    //     .json({ isOk: false, message: "At least one address is required" });
+    // }
 
-    const address = addresses[0];
-    console.log(address);
-    if (
-      !address.addressTitle ||
-      !address.address ||
-      !address.area ||
-      !address.city ||
-      !address.state ||
-      !address.country
-    ) {
-      return res
-        .status(400)
-        .json({ isOk: false, message: "All address fields are required" });
-    }
+    // const address = addresses[0];
+    // console.log(address);
+    // if (
+    //   !address.addressTitle ||
+    //   !address.address ||
+    //   !address.area ||
+    //   !address.city ||
+    //   !address.state ||
+    //   !address.country
+    // ) {
+    //   return res
+    //     .status(400)
+    //     .json({ isOk: false, message: "All address fields are required" });
+    // }
 
     const emailExists = await User.findOne({ email }).exec();
     if (emailExists) {
@@ -58,14 +87,21 @@ exports.createUserMaster = async (req, res) => {
         .json({ isOk: false, message: "Email already exists" });
     }
 
+    const phoneExists = await User.findOne({ phone }).exec();
+    if (phoneExists) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Phone number already exists" });
+    }
+
     // Ensure that at least one address is marked as default.
     // If none is marked as default, mark the first one as default.
-    const defaultFound = addresses.some(
-      (addr) => addr.isDefault === true || addr.isDefault === "true"
-    );
-    if (!defaultFound) {
-      addresses[0].isDefault = true;
-    }
+    // const defaultFound = addresses.some(
+    //   (addr) => addr.isDefault === true || addr.isDefault === "true"
+    // );
+    // if (!defaultFound) {
+    //   addresses[0].isDefault = true;
+    // }
 
     const newUser = new User({
       firstName,
@@ -75,6 +111,7 @@ exports.createUserMaster = async (req, res) => {
       phone,
       isActive,
       addresses: addresses || [],
+      cart: cart || [],
     });
 
     const savedUser = await newUser.save();
@@ -89,7 +126,6 @@ exports.createUserMaster = async (req, res) => {
   }
 };
 
-// 4. LIST all users
 exports.listUserMaster = async (req, res) => {
   try {
     const users = await User.find()
@@ -102,7 +138,6 @@ exports.listUserMaster = async (req, res) => {
   }
 };
 
-// 5. LIST users by parameters (search/sort/pagination)
 exports.listUserMasterByParams = async (req, res) => {
   try {
     let { skip, per_page, sorton, sortdir, match, isActive } = req.body;
@@ -154,6 +189,39 @@ exports.listUserMasterByParams = async (req, res) => {
           path: "$cityData",
           preserveNullAndEmptyArrays: true,
         },
+        
+      },
+      {
+        $group: {
+          _id: "$_id",
+          firstName: { $first: "$firstName" },
+          lastName: { $first: "$lastName" },
+          email: { $first: "$email" },
+          phone: { $first: "$phone" },
+          isActive: { $first: "$isActive" },
+          addresses: { $first: "$addresses" },
+          countryData: { $first: "$countryData" },
+          stateData: { $first: "$stateData" },
+          cityData: { $first: "$cityData" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          firstName: { $first: "$firstName" },
+          lastName: { $first: "$lastName" },
+          email: { $first: "$email" },
+          phone: { $first: "$phone" },
+          isActive: { $first: "$isActive" },
+          addresses: { $first: "$addresses" },
+          countryData: { $first: "$countryData" },
+          stateData: { $first: "$stateData" },
+          cityData: { $first: "$cityData" },
+          createdAt: { $first: "$createdAt" },
+          updatedAt: { $first: "$updatedAt" },
+        },
       },
 
       {
@@ -203,13 +271,13 @@ exports.listUserMasterByParams = async (req, res) => {
               phone: { $regex: match, $options: "i" },
             },
             //  { password: { $regex: match, $options: "i" } }, // commented out as before
-            { "addresses.addressTitle": { $regex: match, $options: "i" } },
-            { "addresses.address": { $regex: match, $options: "i" } },
-            // UPDATED: Search using lookup fields instead of raw ObjectIds
-            { "cityData.CityName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "stateData.StateName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "countryData.CountryName": { $regex: match, $options: "i" } }, // <-- UPDATED
-            { "addresses.area": { $regex: match, $options: "i" } },
+            // { "addresses.addressTitle": { $regex: match, $options: "i" } },
+            // { "addresses.address": { $regex: match, $options: "i" } },
+            // // UPDATED: Search using lookup fields instead of raw ObjectIds
+            // { "cityData.CityName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "stateData.StateName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "countryData.CountryName": { $regex: match, $options: "i" } }, // <-- UPDATED
+            // { "addresses.area": { $regex: match, $options: "i" } },
           ],
         },
       };
@@ -245,7 +313,6 @@ exports.listUserMasterByParams = async (req, res) => {
   }
 };
 
-// 6. UPDATE a user
 exports.updateUserMaster = async (req, res) => {
   try {
     // const updatedData = req.body;
@@ -279,7 +346,6 @@ exports.updateUserMaster = async (req, res) => {
   }
 };
 
-// 7. REMOVE (delete) a user
 exports.removeUserMaster = async (req, res) => {
   try {
     const removedUser = await User.findByIdAndDelete(req.params._id);
@@ -292,7 +358,6 @@ exports.removeUserMaster = async (req, res) => {
   }
 };
 
-// 8. LOGIN for UserMaster
 exports.userLoginMaster = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -301,23 +366,713 @@ exports.userLoginMaster = async (req, res) => {
       return res.status(401).json({ isOk: false, message: "User not found" });
     }
 
-    //const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res
-        .status(401)
-        .json({ isOk: false, message: "Authentication failed" });
+    // Uncomment and use bcrypt.compare if your passwords are hashed:
+    // const isMatch = await bcrypt.compare(password, user.password);
+    // For demonstration, using plain text password comparison:
+    if (user.password !== password) {
+      return res.status(401).json({ isOk: false, message: "Authentication failed" });
     }
 
+    // Generate JWT token for the 'user' role
+    const token = generateAccessToken(user._id, "user");
+
+    // Exclude the password field from the response
     const { password: _, ...userData } = user.toObject();
+
     res.status(200).json({
       isOk: true,
       message: "Authentication successful",
       data: userData,
+      token: token
     });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({ isOk: false, message: "An error occurred while logging in" });
+    res.status(500).json({ isOk: false, message: "An error occurred while logging in" });
+  }
+};
+
+exports.getCart = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" },
+        },
+      },
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
+            { $project: { _id: "$menuItem._id", itemName: "$menuItem.itemName" } },
+          ],
+          as: "cart.menuItemDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            { $match: { $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] } } },
+            {
+              $project: {
+                _id:"$menuItem.variants._id",
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price",
+              },
+            },
+          ],
+          as: "cart.variantDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails",
+        },
+      },
+      // New lookup to join branch details from the Branches collection.
+      {
+        $lookup: {
+          from: "branches",
+          localField: "cart.branch", // assuming the cart has a "branch" field
+          foreignField: "_id",
+          as: "cart.branchDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$cart.branchDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          cart: { $push: "$cart" },
+        },
+      },
+      {
+        $project: {
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                totalPrice: "$$item.totalPrice",
+                menuItem: "$$item.menuItemDetails.itemName",
+                menuItem_id: "$$item.menuItemDetails._id",
+                variant: {
+                  _id: "$$item.variantDetails._id",
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice",
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppind_id: "$$t._id",
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price",
+                    },
+                  },
+                },
+                // Add the branch details
+                branch: {
+                  _id: "$$item.branchDetails._id",
+                  branchName: "$$item.branchDetails.branchName",
+                  address: "$$item.branchDetails.address",
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    const [result] = await User.aggregate(pipeline);
+    if (!result) {
+      return res.json({ isOk: true, data: [], subtotal: 0 });
+    }
+
+    const updatedCart = result.cart;
+    const subtotal = updatedCart.reduce((acc, item) => {
+      return acc + (item.totalPrice || 0);
+    }, 0);
+
+    return res.json({ isOk: true, data: updatedCart, subtotal });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+
+exports.addCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    let cartItem = req.body;
+    const menuDoc = await MenuMaster.findOne({ "menuItem._id": cartItem.menuItem });
+    if (!menuDoc) return res.status(404).json({ isOk: false, message: "Menu item not found" });
+    const menuItem = menuDoc.menuItem.find(mi => mi._id.toString() === cartItem.menuItem);
+    let basePrice = menuItem.price;
+    if (cartItem.variant) {
+      const variant = menuItem.variants.find(v => v._id.toString() === cartItem.variant);
+      if (variant) {
+        basePrice = variant.price;
+      }
+    }
+    let toppingTotal = 0;
+    if (Array.isArray(cartItem.toppings) && cartItem.toppings.length > 0) {
+      const toppingDocs = await ToppingMaster.find({ _id: { $in: cartItem.toppings } });
+      toppingTotal = toppingDocs.reduce((acc, t) => acc + t.price, 0);
+    }
+    const totalPrice = (basePrice + toppingTotal) * cartItem.quantity;
+    cartItem.totalPrice = totalPrice;
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $push: { cart: cartItem } },
+      { new: true }
+    ).exec();
+    if (!user) return res.status(404).json({ isOk: false, message: "User not found" });
+    const subtotal = user.cart.reduce((acc, item) => acc + item.totalPrice, 0);
+    res.status(201).json({
+      isOk: true,
+      data: user.cart,
+      subtotal,
+      message: "Cart item added successfully"
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.updateCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const index = parseInt(req.params.index, 10);
+    const updateData = req.body;
+    const user = await User.findById(userId).exec();
+    if (!user) return res.status(404).json({ isOk: false, message: "User not found" });
+    if (!user.cart || index < 0 || index >= user.cart.length)
+      return res.status(400).json({ isOk: false, message: "Invalid cart item index" });
+
+    user.cart[index] = { ...user.cart[index].toObject(), ...updateData };
+    const cartItem = user.cart[index];
+
+    const menuDoc = await MenuMaster.findOne({ "menuItem._id": cartItem.menuItem });
+    if (!menuDoc) return res.status(404).json({ isOk: false, message: "Menu item not found" });
+    const menuItem = menuDoc.menuItem.find(mi => mi._id.toString() === cartItem.menuItem.toString());
+    
+    let basePrice = menuItem.price;
+    if (cartItem.variant) {
+      const variant = menuItem.variants.find(v => v._id.toString() === cartItem.variant.toString());
+      if (variant) basePrice = variant.price;
+    }
+    
+    let toppingTotal = 0;
+    if (Array.isArray(cartItem.toppings) && cartItem.toppings.length > 0) {
+      const toppingDocs = await ToppingMaster.find({ _id: { $in: cartItem.toppings } });
+      toppingTotal = toppingDocs.reduce((acc, t) => acc + t.price, 0);
+    }
+    
+    const totalPrice = (basePrice + toppingTotal) * cartItem.quantity;
+    user.cart[index].totalPrice = totalPrice;
+
+    await user.save();
+    const subtotal = user.cart.reduce((acc, item) => acc + item.totalPrice, 0);
+    res.json({
+      isOk: true,
+      data: user.cart,
+      subtotal,
+      message: "Cart item updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+exports.removeCartItem = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const index = parseInt(req.params.index, 10);
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    if (!user.cart || index < 0 || index >= user.cart.length) {
+      return res
+        .status(400)
+        .json({ isOk: false, message: "Invalid cart item index" });
+    }
+    user.cart.splice(index, 1);
+    await user.save();
+    const subtotal = user.cart.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    res.json({
+      isOk: true,
+      data: user.cart,
+      message: "Cart item removed successfully",
+      subtotal
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.clearCart = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { cart: [] } },
+      { new: true }
+    ).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({
+      isOk: true,
+      data: user.cart,
+      subtotal:0,
+      message: "Cart cleared successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.getAddresses = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId).select("addresses").exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    res.json({ isOk: true, data: user.addresses });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.getAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const user = await User.findById(userId).select("addresses").exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
+    }
+    res.json({ isOk: true, data: address });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.addAddress = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const newAddress = req.body; // Expect a valid address object per AddressSchema
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    user.addresses.push(newAddress);
+    await user.save();
+    res.status(201).json({
+      isOk: true,
+      data: user.addresses,
+      message: "Address added successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.updateAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const updateData = req.body;
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
+    }
+    // Merge updateData into the existing address subdocument
+    Object.keys(updateData).forEach((key) => {
+      address[key] = updateData[key];
+    });
+    await user.save();
+    res.json({
+      isOk: true,
+      data: address,
+      message: "Address updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.removeAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.params;
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+    // const address = user.addresses.id(addressId);
+    // if (!address) {
+    //   return res
+    //     .status(404)
+    //     .json({ isOk: false, message: "Address not found" });
+    // }
+    // address.remove(); // Remove the subdocument from the array
+
+    // Updated filter-based approach in the same structure:
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res
+        .status(404)
+        .json({ isOk: false, message: "Address not found" });
+    }
+
+    // Instead of `address.remove()`, we manually filter the array:
+    user.addresses = user.addresses.filter(
+      (addr) => String(addr._id) !== addressId
+    );
+
+    await user.save();
+    res.json({
+      isOk: true,
+      data: user.addresses,
+      message: "Address removed successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+exports.sendEmailOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res
+        .status(201)
+        .json({ isOk: false, message: "Email is required" });
+    }
+
+    // 1) Check if user exists
+    let user = await User.findOne({ email }).exec();
+    if (!user) {
+      return res.status(201).json({ isOk: false, message: "User not found" });
+    }
+
+    // 2) Generate a 6-digit OTP (customize as you like)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 3) Set expiration time for, say, 5 minutes from now
+    const expires = new Date(Date.now() + 2 * 60 * 1000);
+
+    // 4) Save OTP and expiration to user record
+    user.otp = otp;
+    user.otpExpiresAt = expires;
+    await user.save();
+
+    // 5) Send email with nodemailer
+    const mailOptions = {
+      from: "process.env.EMAIL_USER", // match transporter user
+      to: user.email,
+      subject: "Your OTP Code",
+      text: `Your login OTP is ${otp}. It will expire in 2 minutes.`,
+    };
+    await transporter.sendMail(mailOptions);
+
+    // 6) Return success
+    return res.json({
+      isOk: true,
+      message: `OTP has been sent to ${user.email}.`,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+exports.verifyEmailOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res
+        .status(201)
+        .json({ isOk: false, message: "Email and OTP are required" });
+    }
+
+    // 1) Check if user exists
+    let user = await User.findOne({ email }).exec();
+    if (!user) {
+      return res.status(404).json({ isOk: false, message: "User not found" });
+    }
+
+    // 2) Verify OTP matches and is not expired
+    if (user.otp !== otp) {
+      return res.status(401).json({ isOk: false, message: "Invalid OTP" });
+    }
+    if (!user.otpExpiresAt || user.otpExpiresAt < Date.now()) {
+      return res.status(401).json({
+        isOk: false,
+        message: "OTP has expired, please request a new one",
+      });
+    }
+
+    // 3) Clear the OTP from DB (so it can’t be reused)
+    user.otp = null;
+    user.otpExpiresAt = null;
+    await user.save();
+
+    // 4) Generate a JWT token for the user role "USER"
+    const token = generateAccessToken(user._id, "user");
+
+    // 5) Return success plus user data (without password & OTP fields) and token
+    const { password, otp: unused, otpExpiresAt, ...rest } = user.toObject();
+    return res.json({
+      isOk: true,
+      message: "OTP verified successfully",
+      data: rest,
+      token: token,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
+  }
+};
+
+
+
+exports.getGrandTotal = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    const couponCode = req.query.couponCode ? req.query.couponCode.trim() : null;
+
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+      { $unwind: { path: "$cart", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          "cart.menuItem": { $toObjectId: "$cart.menuItem" }
+        }
+      },
+      {
+        $addFields: {
+          "cart.toppings": {
+            $map: {
+              input: "$cart.toppings",
+              as: "t",
+              in: { $toObjectId: "$$t" }
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { menuId: "$cart.menuItem" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $match: { $expr: { $eq: ["$menuItem._id", "$$menuId"] } } },
+            { $project: { _id: 0, itemName: "$menuItem.itemName", price: "$menuItem.price" } }
+          ],
+          as: "cart.menuItemDetails"
+        }
+      },
+      {
+        $unwind: {
+          path: "$cart.menuItemDetails",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: "menumasters",
+          let: { variantId: "$cart.variant" },
+          pipeline: [
+            { $unwind: "$menuItem" },
+            { $unwind: "$menuItem.variants" },
+            { $match: { $expr: { $eq: ["$menuItem.variants._id", "$$variantId"] } } },
+            {
+              $project: {
+                _id: 0,
+                variantName: "$menuItem.variants.variantName",
+                variantPrice: "$menuItem.variants.price"
+              }
+            }
+          ],
+          as: "cart.variantDetails"
+        }
+      },
+      {
+        $unwind: {
+          path: "$cart.variantDetails",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: "toppingmasters",
+          localField: "cart.toppings",
+          foreignField: "_id",
+          as: "cart.toppingDetails"
+        }
+      },
+      {
+        $group: {
+          _id: "$_id",
+          cart: { $push: "$cart" }
+        }
+      },
+      {
+        $project: {
+          cart: {
+            $map: {
+              input: "$cart",
+              as: "item",
+              in: {
+                quantity: "$$item.quantity",
+                // Use totalPrice if it exists; otherwise, fallback to (price * quantity)
+                totalPrice: {
+                  $ifNull: [
+                    "$$item.totalPrice",
+                    { $multiply: ["$$item.quantity", { $ifNull: ["$$item.menuItemDetails.price", 0] }] }
+                  ]
+                },
+                menuItem: "$$item.menuItemDetails.itemName",
+                variant: {
+                  name: "$$item.variantDetails.variantName",
+                  price: "$$item.variantDetails.variantPrice"
+                },
+                toppings: {
+                  $map: {
+                    input: "$$item.toppingDetails",
+                    as: "t",
+                    in: {
+                      toppingName: "$$t.toppingName",
+                      toppingPrice: "$$t.price"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ];
+
+    const [result] = await User.aggregate(pipeline);
+    if (!result) {
+      return res.json({
+        isOk: true,
+        data: [],
+        subtotal: 0,
+        discount: 0,
+        effectiveSubtotal: 0,
+        cgst: 0,
+        sgst: 0,
+        grandTotal: 0
+      });
+    }
+
+    const updatedCart = result.cart;
+    let subtotal = updatedCart.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
+
+    // --- Coupon discount calculation ---
+    let discount = 0;
+    if (couponCode) {
+      const couponAssign = await CouponAssign.findOne({ uniqueCouponCode: couponCode })
+        .populate('coupon')
+        .exec();
+      if (couponAssign && couponAssign.isActive && couponAssign.coupon) {
+        const discountPercentage = Number(couponAssign.coupon.discountPercentage) || 0;
+        const maxDiscount = Number(couponAssign.coupon.maxDiscount) || Infinity;
+        discount = Math.min(subtotal * (discountPercentage / 100), maxDiscount);
+      }
+    }
+    // ----------------------------------------------------------------
+
+    const effectiveSubtotal = subtotal - discount;
+    const cgst = effectiveSubtotal * 0.05;
+    const sgst = effectiveSubtotal * 0.05;
+    const grandTotal = effectiveSubtotal + cgst + sgst;
+
+    return res.json({
+      isOk: true,
+      data: updatedCart,
+      subtotal,
+      discount,
+      effectiveSubtotal,
+      cgst,
+      sgst,
+      grandTotal
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ isOk: false, message: error.message });
   }
 };
